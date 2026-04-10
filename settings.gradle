@@ -1,1 +1,3 @@
 include ':app'
+include ':cardboard-sdk'
+project(':cardboard-sdk').projectDir = new File('cardboard/sdk')

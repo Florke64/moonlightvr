@@ -1,3 +1,6 @@
 [submodule "app/src/main/jni/moonlight-core/moonlight-common-c"]
 	path = app/src/main/jni/moonlight-core/moonlight-common-c
 	url = https://github.com/moonlight-stream/moonlight-common-c.git
+[submodule "vendor/cardboard"]
+	path = vendor/cardboard
+	url = https://github.com/googlevr/cardboard.git
