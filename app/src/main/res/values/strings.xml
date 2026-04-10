@@ -229,6 +229,8 @@
     <string name="title_seekbar_vr_screen_distance">VR screen distance</string>
     <string name="summary_seekbar_vr_screen_distance">Move the virtual screen closer or farther from your eyes.</string>
     <string name="suffix_seekbar_vr_distance">m</string>
+    <string name="title_seekbar_vr_screen_size">VR screen size</string>
+    <string name="summary_seekbar_vr_screen_size">Adjust the size of the virtual screen.</string>
     <string name="title_language_list">Language</string>
     <string name="summary_language_list">Language to use for Moonlight</string>
     <string name="title_checkbox_small_icon_mode">Use small box art</string>

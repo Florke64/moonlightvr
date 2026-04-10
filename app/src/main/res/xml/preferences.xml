@@ -235,6 +235,16 @@
             android:summary="@string/summary_seekbar_vr_screen_distance"
             android:text="@string/suffix_seekbar_vr_distance"
             android:title="@string/title_seekbar_vr_screen_distance" />
+        <com.limelight.preferences.SeekBarPreference
+            android:key="seekbar_vr_screen_size"
+            android:dialogMessage="@string/summary_seekbar_vr_screen_size"
+            seekbar:min="25"
+            android:max="100"
+            seekbar:step="1"
+            seekbar:divisor="50"
+            android:defaultValue="50"
+            android:summary="@string/summary_seekbar_vr_screen_size"
+            android:title="@string/title_seekbar_vr_screen_size" />
         <com.limelight.preferences.SmallIconCheckboxPreference
             android:key="checkbox_small_icon_mode"
             android:title="@string/title_checkbox_small_icon_mode"

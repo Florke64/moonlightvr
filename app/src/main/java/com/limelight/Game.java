@@ -235,6 +235,7 @@ public class Game extends Activity implements SurfaceHolder.Callback,
                 vrSurfaceView.setVisibility(View.VISIBLE);
                 vrRenderer = new VrRenderer(this, vrSurfaceView, vrSurfaceListener);
                 vrRenderer.setScreenDistance(prefConfig.vrScreenDistanceMeters);
+                vrRenderer.setScreenSize(prefConfig.vrScreenSizeMultiplier);
                 vrSurfaceView.setEGLContextClientVersion(2);
                 vrSurfaceView.setRenderer(vrRenderer);
                 vrSurfaceView.setRenderMode(GLSurfaceView.RENDERMODE_CONTINUOUSLY);

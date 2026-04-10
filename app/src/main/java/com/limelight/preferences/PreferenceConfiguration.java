@@ -70,6 +70,7 @@ public class PreferenceConfiguration {
     private static final String GAMEPAD_MOTION_FALLBACK_PREF_STRING = "checkbox_gamepad_motion_fallback";
     private static final String ENABLE_VR_PREF_STRING = "checkbox_enable_vr";
     private static final String VR_SCREEN_DISTANCE_PREF_STRING = "seekbar_vr_screen_distance";
+    private static final String VR_SCREEN_SIZE_PREF_STRING = "seekbar_vr_screen_size";
 
     static final String DEFAULT_RESOLUTION = "1280x720";
     static final String DEFAULT_FPS = "60";
@@ -112,6 +113,7 @@ public class PreferenceConfiguration {
     private static final boolean DEFAULT_GAMEPAD_MOTION_SENSORS = true;
     private static final boolean DEFAULT_GAMEPAD_MOTION_FALLBACK = false;
     private static final int DEFAULT_VR_SCREEN_DISTANCE_INT = 20;
+    private static final int DEFAULT_VR_SCREEN_SIZE_INT = 50;
 
     public static final int FRAME_PACING_MIN_LATENCY = 0;
     public static final int FRAME_PACING_BALANCED = 1;
@@ -161,6 +163,7 @@ public class PreferenceConfiguration {
     public boolean gamepadMotionSensorsFallbackToDevice;
     public boolean enableVr;
     public float vrScreenDistanceMeters;
+    public float vrScreenSizeMultiplier;
 
     public static boolean isNativeResolution(int width, int height) {
         // It's not a native resolution if it matches an existing resolution option
@@ -591,6 +594,8 @@ public class PreferenceConfiguration {
         config.enableVr = prefs.getBoolean(ENABLE_VR_PREF_STRING, DEFAULT_ENABLE_VR);
         int vrDistanceRaw = prefs.getInt(VR_SCREEN_DISTANCE_PREF_STRING, DEFAULT_VR_SCREEN_DISTANCE_INT);
         config.vrScreenDistanceMeters = vrDistanceRaw / 10f;
+        int vrSizeRaw = prefs.getInt(VR_SCREEN_SIZE_PREF_STRING, DEFAULT_VR_SCREEN_SIZE_INT);
+        config.vrScreenSizeMultiplier = vrSizeRaw / 50f;
         config.enablePip = prefs.getBoolean(ENABLE_PIP_PREF_STRING, DEFAULT_ENABLE_PIP);
         config.enablePerfOverlay = prefs.getBoolean(ENABLE_PERF_OVERLAY_STRING, DEFAULT_ENABLE_PERF_OVERLAY);
         config.bindAllUsb = prefs.getBoolean(BIND_ALL_USB_STRING, DEFAULT_BIND_ALL_USB);

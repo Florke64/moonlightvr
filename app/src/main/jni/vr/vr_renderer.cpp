@@ -90,7 +90,8 @@ VrMoonlightApp::VrMoonlightApp(JavaVM* vm, jobject activity, jobject asset_manag
       sampler_uniform_(-1),
       mvp_uniform_(-1),
       model_matrix_(),
-      screen_distance_meters_(kDefaultScreenDistanceMeters) {
+      screen_distance_meters_(kDefaultScreenDistanceMeters),
+      screen_size_multiplier_(1.0f) {
   std::fill(std::begin(texture_transform_), std::end(texture_transform_), 0.f);
   texture_transform_[0] = texture_transform_[5] = texture_transform_[10] =
       texture_transform_[15] = 1.f;
@@ -426,8 +427,18 @@ void VrMoonlightApp::SetScreenDistance(float meters) {
   UpdateModelMatrix();
 }
 
+void VrMoonlightApp::SetScreenSize(float sizeMultiplier) {
+  screen_size_multiplier_ = sizeMultiplier;
+  if (screen_size_multiplier_ < 0.25f) {
+    screen_size_multiplier_ = 0.25f;
+  } else if (screen_size_multiplier_ > 2.0f) {
+    screen_size_multiplier_ = 2.0f;
+  }
+  UpdateModelMatrix();
+}
+
 void VrMoonlightApp::UpdateModelMatrix() {
-  const float half_width = kScreenWidthMeters * 0.5f;
+  const float half_width = kScreenWidthMeters * 0.5f * screen_size_multiplier_;
   const float half_height = half_width / kScreenAspectRatio;
   const std::array<float, 3> scale = {half_width, -half_height, 1.0f};
   const std::array<float, 3> translation = {0.0f, 0.0f, -screen_distance_meters_};

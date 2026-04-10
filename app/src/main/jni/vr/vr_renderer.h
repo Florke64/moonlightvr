@@ -24,6 +24,7 @@ class VrMoonlightApp {
   void OnPause();
   void OnResume();
   void SetScreenDistance(float meters);
+  void SetScreenSize(float sizeMultiplier);
 
  private:
   void ResetRenderTarget();
@@ -65,6 +66,7 @@ class VrMoonlightApp {
   float texture_transform_[16];
   Matrix4x4 model_matrix_;
   float screen_distance_meters_;
+  float screen_size_multiplier_;
 };
 
 }  // namespace moonlight_vr
