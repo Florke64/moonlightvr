@@ -224,6 +224,17 @@
             android:title="@string/title_checkbox_enable_vr"
             android:summary="@string/summary_checkbox_enable_vr"
             android:defaultValue="false" />
+        <com.limelight.preferences.SeekBarPreference
+            android:key="seekbar_vr_screen_distance"
+            android:dialogMessage="@string/summary_seekbar_vr_screen_distance"
+            seekbar:min="10"
+            android:max="40"
+            seekbar:step="1"
+            seekbar:divisor="10"
+            android:defaultValue="20"
+            android:summary="@string/summary_seekbar_vr_screen_distance"
+            android:text="@string/suffix_seekbar_vr_distance"
+            android:title="@string/title_seekbar_vr_screen_distance" />
         <com.limelight.preferences.SmallIconCheckboxPreference
             android:key="checkbox_small_icon_mode"
             android:title="@string/title_checkbox_small_icon_mode"

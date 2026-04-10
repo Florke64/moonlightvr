@@ -24,8 +24,10 @@ constexpr float kZFar = 100.0f;
 constexpr int kVelocityFilterCutoffFrequency = 6;
 constexpr int64_t kPredictionTimeWithoutVsyncNanos = 50000000LL;
 constexpr float kScreenWidthMeters = 2.2f;
-constexpr float kScreenDistanceMeters = 2.5f;
 constexpr float kScreenAspectRatio = 16.0f / 9.0f;
+constexpr float kMinScreenDistanceMeters = 1.0f;
+constexpr float kMaxScreenDistanceMeters = 4.0f;
+constexpr float kDefaultScreenDistanceMeters = 2.0f;
 
 constexpr int kEyeCount = 2;
 
@@ -87,7 +89,8 @@ VrMoonlightApp::VrMoonlightApp(JavaVM* vm, jobject activity, jobject asset_manag
       texture_transform_uniform_(-1),
       sampler_uniform_(-1),
       mvp_uniform_(-1),
-      model_matrix_() {
+      model_matrix_(),
+      screen_distance_meters_(kDefaultScreenDistanceMeters) {
   std::fill(std::begin(texture_transform_), std::end(texture_transform_), 0.f);
   texture_transform_[0] = texture_transform_[5] = texture_transform_[10] =
       texture_transform_[15] = 1.f;
@@ -118,11 +121,7 @@ VrMoonlightApp::VrMoonlightApp(JavaVM* vm, jobject activity, jobject asset_manag
     head_tracker_ = nullptr;
   }
 
-  const float half_width = kScreenWidthMeters * 0.5f;
-  const float half_height = half_width / kScreenAspectRatio;
-  const std::array<float, 3> scale = {half_width, half_height, 1.0f};
-  const std::array<float, 3> translation = {0.0f, 0.0f, -kScreenDistanceMeters};
-  model_matrix_ = GetTranslationMatrix(translation) * GetScaleMatrix(scale);
+  UpdateModelMatrix();
 }
 
 VrMoonlightApp::~VrMoonlightApp() {
@@ -415,6 +414,24 @@ void VrMoonlightApp::DestroyCardboardResources() {
     CardboardLensDistortion_destroy(lens_distortion_);
     lens_distortion_ = nullptr;
   }
+}
+
+void VrMoonlightApp::SetScreenDistance(float meters) {
+  screen_distance_meters_ = meters;
+  if (screen_distance_meters_ < kMinScreenDistanceMeters) {
+    screen_distance_meters_ = kMinScreenDistanceMeters;
+  } else if (screen_distance_meters_ > kMaxScreenDistanceMeters) {
+    screen_distance_meters_ = kMaxScreenDistanceMeters;
+  }
+  UpdateModelMatrix();
+}
+
+void VrMoonlightApp::UpdateModelMatrix() {
+  const float half_width = kScreenWidthMeters * 0.5f;
+  const float half_height = half_width / kScreenAspectRatio;
+  const std::array<float, 3> scale = {half_width, -half_height, 1.0f};
+  const std::array<float, 3> translation = {0.0f, 0.0f, -screen_distance_meters_};
+  model_matrix_ = GetTranslationMatrix(translation) * GetScaleMatrix(scale);
 }
 
 }  // namespace moonlight_vr

@@ -41,14 +41,21 @@ Java_com_limelight_vr_VrRenderer_nativeOnSurfaceChanged(JNIEnv*, jobject,
 
 extern "C" JNIEXPORT void JNICALL
 Java_com_limelight_vr_VrRenderer_nativeSetTextureTransform(JNIEnv* env, jobject,
-                                                         jlong handle,
-                                                         jfloatArray matrix) {
+                                                          jlong handle,
+                                                          jfloatArray matrix) {
   if (matrix == nullptr) {
     return;
   }
   jfloat* elements = env->GetFloatArrayElements(matrix, nullptr);
   FromHandle(handle)->SetTextureTransform(elements);
   env->ReleaseFloatArrayElements(matrix, elements, JNI_ABORT);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_limelight_vr_VrRenderer_nativeSetScreenDistance(JNIEnv*, jobject,
+                                                        jlong handle,
+                                                        jfloat distanceMeters) {
+  FromHandle(handle)->SetScreenDistance(distanceMeters);
 }
 
 extern "C" JNIEXPORT void JNICALL

@@ -23,6 +23,7 @@ class VrMoonlightApp {
   void OnDrawFrame();
   void OnPause();
   void OnResume();
+  void SetScreenDistance(float meters);
 
  private:
   void ResetRenderTarget();
@@ -31,6 +32,7 @@ class VrMoonlightApp {
   void RenderVideoToTexture(const std::array<float, 3>& head_position,
                             const std::array<float, 4>& head_orientation);
   void DestroyCardboardResources();
+  void UpdateModelMatrix();
 
   JavaVM* java_vm_;
   jobject activity_;
@@ -62,6 +64,7 @@ class VrMoonlightApp {
 
   float texture_transform_[16];
   Matrix4x4 model_matrix_;
+  float screen_distance_meters_;
 };
 
 }  // namespace moonlight_vr

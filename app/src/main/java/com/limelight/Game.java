@@ -228,16 +228,17 @@ public class Game extends Activity implements SurfaceHolder.Callback,
         prefConfig = PreferenceConfiguration.readPreferences(this);
         tombstonePrefs = Game.this.getSharedPreferences("DecoderTombstone", 0);
 
-        vrMode = getIntent().getBooleanExtra(EXTRA_ENABLE_VR, false) ||
-                (prefConfig != null && prefConfig.enableVr);
-        vrSurfaceView = findViewById(R.id.vrSurfaceView);
-        if (vrMode) {
-            vrSurfaceView.setVisibility(View.VISIBLE);
-            vrRenderer = new VrRenderer(this, vrSurfaceView, vrSurfaceListener);
-            vrSurfaceView.setEGLContextClientVersion(2);
-            vrSurfaceView.setRenderer(vrRenderer);
-            vrSurfaceView.setRenderMode(GLSurfaceView.RENDERMODE_CONTINUOUSLY);
-        }
+            vrMode = getIntent().getBooleanExtra(EXTRA_ENABLE_VR, false) ||
+                    (prefConfig != null && prefConfig.enableVr);
+            vrSurfaceView = findViewById(R.id.vrSurfaceView);
+            if (vrMode) {
+                vrSurfaceView.setVisibility(View.VISIBLE);
+                vrRenderer = new VrRenderer(this, vrSurfaceView, vrSurfaceListener);
+                vrRenderer.setScreenDistance(prefConfig.vrScreenDistanceMeters);
+                vrSurfaceView.setEGLContextClientVersion(2);
+                vrSurfaceView.setRenderer(vrRenderer);
+                vrSurfaceView.setRenderMode(GLSurfaceView.RENDERMODE_CONTINUOUSLY);
+            }
         else {
             vrSurfaceView.setVisibility(View.GONE);
         }

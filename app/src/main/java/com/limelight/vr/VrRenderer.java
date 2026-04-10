@@ -96,6 +96,10 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
         return videoSurface;
     }
 
+    public void setScreenDistance(float distanceMeters) {
+        nativeSetScreenDistance(nativeHandle, distanceMeters);
+    }
+
     private native long nativeCreate(Context context, AssetManager assetManager);
     private native void nativeDestroy(long handle);
     private native int nativeOnSurfaceCreated(long handle);
@@ -104,4 +108,5 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
     private native void nativeOnDrawFrame(long handle);
     private native void nativeOnPause(long handle);
     private native void nativeOnResume(long handle);
+    private native void nativeSetScreenDistance(long handle, float distanceMeters);
 }
