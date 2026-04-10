@@ -10,6 +10,12 @@
         android:layout_height="match_parent"
         android:layout_gravity="center" />
 
+    <android.opengl.GLSurfaceView
+        android:id="@+id/vrSurfaceView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:visibility="gone" />
+
     <com.limelight.ui.StreamView
         android:id="@+id/surfaceView"
         android:layout_width="match_parent"

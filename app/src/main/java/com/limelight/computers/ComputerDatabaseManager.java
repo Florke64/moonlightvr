@@ -18,6 +18,10 @@ import android.content.Context;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteException;
+import android.util.Log;
+
+import java.io.File;
+import java.util.Arrays;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -45,39 +49,70 @@ public class ComputerDatabaseManager {
 
     public ComputerDatabaseManager(Context c) {
         try {
-            // Create or open an existing DB
-            computerDb = c.openOrCreateDatabase(COMPUTER_DB_NAME, 0, null);
+            // Ensure the database directory exists
+            File dbFile = c.getDatabasePath(COMPUTER_DB_NAME);
+            File dbDir = dbFile.getParentFile();
+            if (dbDir != null && !dbDir.exists()) {
+                if (!dbDir.mkdirs()) {
+                    Log.e("ComputerDatabaseManager", "Failed to create database directory");
+                }
+            }
+
+            this.computerDb = c.openOrCreateDatabase(COMPUTER_DB_NAME, 0, null);
         } catch (SQLiteException e) {
-            // Delete the DB and try again
-            c.deleteDatabase(COMPUTER_DB_NAME);
-            computerDb = c.openOrCreateDatabase(COMPUTER_DB_NAME, 0, null);
+            // Log the exception first
+            Log.e("ComputerDatabaseManager", "Failed to open database", e);
+
+            try {
+                // Attempt to delete and recreate
+                c.deleteDatabase(COMPUTER_DB_NAME);
+                this.computerDb = c.openOrCreateDatabase(COMPUTER_DB_NAME, 0, null);
+            } catch (Exception retryEx) {
+                Log.e("ComputerDatabaseManager", "Failed to recover database", retryEx);
+                // If we still can't open the database, we might need a fallback strategy
+                throw new RuntimeException("Could not initialize computer database", retryEx);
+            }
         }
+
         initializeDb(c);
     }
 
     public void close() {
-        computerDb.close();
+        if (computerDb != null) {
+            computerDb.close();
+        }
     }
 
     private void initializeDb(Context c) {
+        // Ensure the database directory exists
+        File dbDir = c.getDatabasePath(COMPUTER_DB_NAME).getParentFile();
+        if (dbDir != null && !dbDir.exists()) {
+            if (!dbDir.mkdirs()) {
+                Log.e("ComputerDatabaseManager", "Failed to create database directory");
+            }
+        }
+
         // Create tables if they aren't already there
         computerDb.execSQL(String.format((Locale)null,
                 "CREATE TABLE IF NOT EXISTS %s(%s TEXT PRIMARY KEY, %s TEXT NOT NULL, %s TEXT NOT NULL, %s TEXT, %s TEXT)",
                 COMPUTER_TABLE_NAME, COMPUTER_UUID_COLUMN_NAME, COMPUTER_NAME_COLUMN_NAME,
                 ADDRESSES_COLUMN_NAME, MAC_ADDRESS_COLUMN_NAME, SERVER_CERT_COLUMN_NAME));
 
-        // Move all computers from the old DB (if any) to the new one
-        List<ComputerDetails> oldComputers = LegacyDatabaseReader.migrateAllComputers(c);
-        for (ComputerDetails computer : oldComputers) {
-            updateComputer(computer);
-        }
-        oldComputers = LegacyDatabaseReader2.migrateAllComputers(c);
-        for (ComputerDetails computer : oldComputers) {
-            updateComputer(computer);
-        }
-        oldComputers = LegacyDatabaseReader3.migrateAllComputers(c);
-        for (ComputerDetails computer : oldComputers) {
-            updateComputer(computer);
+        // Attempt to migrate computers with error handling
+        List<List<ComputerDetails>> legacyReaders = Arrays.asList(
+            LegacyDatabaseReader.migrateAllComputers(c),
+            LegacyDatabaseReader2.migrateAllComputers(c),
+            LegacyDatabaseReader3.migrateAllComputers(c)
+        );
+
+        for (List<ComputerDetails> oldComputers : legacyReaders) {
+            try {
+                for (ComputerDetails computer : oldComputers) {
+                    updateComputer(computer);
+                }
+            } catch (Exception e) {
+                Log.e("ComputerDatabaseManager", "Failed to migrate computer database", e);
+            }
         }
     }
 

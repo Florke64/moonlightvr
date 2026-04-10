@@ -224,6 +224,8 @@
     <string name="category_ui_settings">UI Settings</string>
     <string name="title_checkbox_enable_pip">Enable Picture-in-Picture observer mode</string>
     <string name="summary_checkbox_enable_pip">Allows the stream to be viewed (but not controlled) while multitasking</string>
+    <string name="title_checkbox_enable_vr">Enable VR mode</string>
+    <string name="summary_checkbox_enable_vr">Stream in Google Cardboard VR</string>
     <string name="title_language_list">Language</string>
     <string name="summary_language_list">Language to use for Moonlight</string>
     <string name="title_checkbox_small_icon_mode">Use small box art</string>

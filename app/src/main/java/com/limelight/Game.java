@@ -36,6 +36,7 @@ import com.limelight.utils.ServerHelper;
 import com.limelight.utils.ShortcutHelper;
 import com.limelight.utils.SpinnerDialog;
 import com.limelight.utils.UiHelper;
+import com.limelight.vr.VrRenderer;
 
 import android.annotation.SuppressLint;
 import android.annotation.TargetApi;
@@ -66,6 +67,7 @@ import android.view.InputDevice;
 import android.view.KeyCharacterMap;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
+import android.opengl.GLSurfaceView;
 import android.view.Surface;
 import android.view.SurfaceHolder;
 import android.view.View;
@@ -137,6 +139,16 @@ public class Game extends Activity implements SurfaceHolder.Callback,
     private boolean waitingForAllModifiersUp = false;
     private int specialKeyCode = KeyEvent.KEYCODE_UNKNOWN;
     private StreamView streamView;
+    private boolean vrMode;
+    private GLSurfaceView vrSurfaceView;
+    private VrRenderer vrRenderer;
+    private Surface vrRenderSurface;
+    private final VrRenderer.SurfaceListener vrSurfaceListener = new VrRenderer.SurfaceListener() {
+        @Override
+        public void onSurfaceReady(Surface surface) {
+            handleVrSurfaceReady(surface);
+        }
+    };
     private long lastAbsTouchUpTime = 0;
     private long lastAbsTouchDownTime = 0;
     private float lastAbsTouchUpX, lastAbsTouchUpY;
@@ -180,6 +192,7 @@ public class Game extends Activity implements SurfaceHolder.Callback,
     public static final String EXTRA_PC_NAME = "PcName";
     public static final String EXTRA_APP_HDR = "HDR";
     public static final String EXTRA_SERVER_CERT = "ServerCert";
+    public static final String EXTRA_ENABLE_VR = "EnableVr";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -211,13 +224,27 @@ public class Game extends Activity implements SurfaceHolder.Callback,
         // Inflate the content
         setContentView(R.layout.activity_game);
 
+        // Read the stream preferences early for VR mode check
+        prefConfig = PreferenceConfiguration.readPreferences(this);
+        tombstonePrefs = Game.this.getSharedPreferences("DecoderTombstone", 0);
+
+        vrMode = getIntent().getBooleanExtra(EXTRA_ENABLE_VR, false) ||
+                (prefConfig != null && prefConfig.enableVr);
+        vrSurfaceView = findViewById(R.id.vrSurfaceView);
+        if (vrMode) {
+            vrSurfaceView.setVisibility(View.VISIBLE);
+            vrRenderer = new VrRenderer(this, vrSurfaceView, vrSurfaceListener);
+            vrSurfaceView.setEGLContextClientVersion(2);
+            vrSurfaceView.setRenderer(vrRenderer);
+            vrSurfaceView.setRenderMode(GLSurfaceView.RENDERMODE_CONTINUOUSLY);
+        }
+        else {
+            vrSurfaceView.setVisibility(View.GONE);
+        }
+
         // Start the spinner
         spinner = SpinnerDialog.displayDialog(this, getResources().getString(R.string.conn_establishing_title),
                 getResources().getString(R.string.conn_establishing_msg), true);
-
-        // Read the stream preferences
-        prefConfig = PreferenceConfiguration.readPreferences(this);
-        tombstonePrefs = Game.this.getSharedPreferences("DecoderTombstone", 0);
 
         // Enter landscape unless we're on a square screen
         setPreferredOrientationForCurrentDisplay();
@@ -240,6 +267,7 @@ public class Game extends Activity implements SurfaceHolder.Callback,
         streamView.setOnGenericMotionListener(this);
         streamView.setOnKeyListener(this);
         streamView.setInputCallbacks(this);
+        streamView.setVisibility(vrMode ? View.GONE : View.VISIBLE);
 
         // Listen for touch events on the background touch view to enable trackpad mode
         // to work on areas outside of the StreamView itself. We use a separate View
@@ -1051,6 +1079,15 @@ public class Game extends Activity implements SurfaceHolder.Callback,
 
         // Destroy the capture provider
         inputCaptureProvider.destroy();
+
+        if (vrRenderer != null) {
+            vrRenderer.release();
+            vrRenderer = null;
+        }
+        if (vrRenderSurface != null) {
+            vrRenderSurface.release();
+            vrRenderSurface = null;
+        }
     }
 
     @Override
@@ -1065,7 +1102,20 @@ public class Game extends Activity implements SurfaceHolder.Callback,
             setInputGrabState(false);
         }
 
+        if (vrMode && vrRenderer != null) {
+            vrRenderer.onPause();
+        }
+
         super.onPause();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+
+        if (vrMode && vrRenderer != null) {
+            vrRenderer.onResume();
+        }
     }
 
     @Override
@@ -2489,16 +2539,11 @@ public class Game extends Activity implements SurfaceHolder.Callback,
             throw new IllegalStateException("Surface changed before creation!");
         }
 
-        if (!attemptedConnection) {
-            attemptedConnection = true;
-
-            // Update GameManager state to indicate we're "loading" while connecting
-            UiHelper.notifyStreamConnecting(Game.this);
-
-            decoderRenderer.setRenderTarget(holder);
-            conn.start(new AndroidAudioRenderer(Game.this, prefConfig.enableAudioFx),
-                    decoderRenderer, Game.this);
+        if (vrMode) {
+            return;
         }
+
+        startConnectionWithSurface(holder.getSurface());
     }
 
     @Override
@@ -2535,6 +2580,31 @@ public class Game extends Activity implements SurfaceHolder.Callback,
             holder.getSurface().setFrameRate(desiredFrameRate,
                     Surface.FRAME_RATE_COMPATIBILITY_FIXED_SOURCE);
         }
+    }
+
+    private void handleVrSurfaceReady(final Surface surface) {
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                if (!vrMode || surface == null) {
+                    return;
+                }
+                vrRenderSurface = surface;
+                startConnectionWithSurface(surface);
+            }
+        });
+    }
+
+    private void startConnectionWithSurface(Surface surface) {
+        if (surface == null || attemptedConnection) {
+            return;
+        }
+
+        attemptedConnection = true;
+        UiHelper.notifyStreamConnecting(Game.this);
+        decoderRenderer.setRenderSurface(surface);
+        conn.start(new AndroidAudioRenderer(Game.this, prefConfig.enableAudioFx),
+                decoderRenderer, Game.this);
     }
 
     @Override
