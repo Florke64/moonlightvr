@@ -298,6 +298,7 @@ public class MediaCodecDecoderRenderer extends VideoDecoderRenderer implements C
     }
 
     public void setRenderSurface(Surface surface) {
+        LimeLog.info("MediaCodecDecoderRenderer.setRenderSurface: surface=" + surface + " valid=" + (surface != null ? surface.isValid() : false) + " renderSurface=" + this.renderSurface + " thread=" + Thread.currentThread().getName());
         this.renderSurface = surface;
     }
 
@@ -549,9 +550,14 @@ public class MediaCodecDecoderRenderer extends VideoDecoderRenderer implements C
             targetSurface = renderTarget.getSurface();
         }
         if (targetSurface == null) {
+            LimeLog.severe("MediaCodecDecoderRenderer.configureAndStartDecoder: NO RENDER SURFACE! renderSurface=" + renderSurface + " renderTarget=" + renderTarget);
             throw new IllegalStateException("No render surface available");
         }
-
+        if (!targetSurface.isValid()) {
+            LimeLog.severe("MediaCodecDecoderRenderer.configureAndStartDecoder: INVALID SURFACE! targetSurface=" + targetSurface + " renderSurface=" + renderSurface + " renderTarget=" + renderTarget);
+            throw new IllegalStateException("Render surface is invalid");
+        }
+        LimeLog.info("MediaCodecDecoderRenderer.configureAndStartDecoder: targetSurface=" + targetSurface + " isValid=" + targetSurface.isValid());
         videoDecoder.configure(format, targetSurface, null, 0);
 
         configuredFormat = format;
@@ -1250,6 +1256,7 @@ public class MediaCodecDecoderRenderer extends VideoDecoderRenderer implements C
 
     // !!! May be called even if setup()/start() fails !!!
     public void prepareForStop() {
+        LimeLog.warning("MediaCodecDecoderRenderer.prepareForStop: called, stopping=" + stopping + " thread=" + Thread.currentThread().getName());
         // Let the decoding code know to ignore codec exceptions now
         stopping = true;
 

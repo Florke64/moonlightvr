@@ -2537,11 +2537,13 @@ public class Game extends Activity implements SurfaceHolder.Callback,
 
     @Override
     public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
+        LimeLog.info("Game.surfaceChanged: vrMode=" + vrMode + ", surfaceCreated=" + surfaceCreated + ", attemptedConnection=" + attemptedConnection + ", connected=" + connected + ", holder=" + holder);
         if (!surfaceCreated) {
             throw new IllegalStateException("Surface changed before creation!");
         }
 
         if (vrMode) {
+            LimeLog.info("Game.surfaceChanged: skipping in vrMode");
             return;
         }
 
@@ -2553,11 +2555,12 @@ public class Game extends Activity implements SurfaceHolder.Callback,
         float desiredFrameRate;
 
         surfaceCreated = true;
+        LimeLog.info("Game.surfaceCreated: vrMode=" + vrMode + ", attemptedConnection=" + attemptedConnection + ", connected=" + connected + ", holder=" + holder);
 
         // Android will pick the lowest matching refresh rate for a given frame rate value, so we want
         // to report the true FPS value if refresh rate reduction is enabled. We also report the true
         // FPS value if there's no suitable matching refresh rate. In that case, Android could try to
-        // select a lower refresh rate that avoids uneven pull-down (ex: 30 Hz for a 60 FPS stream on
+        // select a lower refresh rate that avoids uneven pull-down (ex: 30 Hz for a 60 Hz stream on
         // a display that maxes out at 50 Hz).
         if (mayReduceRefreshRate() || desiredRefreshRate < prefConfig.fps) {
             desiredFrameRate = prefConfig.fps;
@@ -2588,6 +2591,7 @@ public class Game extends Activity implements SurfaceHolder.Callback,
         runOnUiThread(new Runnable() {
             @Override
             public void run() {
+                LimeLog.info("Game.handleVrSurfaceReady: vrMode=" + vrMode + ", surface=" + surface + ", attemptedConnection=" + attemptedConnection + ", connected=" + connected);
                 if (!vrMode || surface == null) {
                     return;
                 }
@@ -2598,13 +2602,17 @@ public class Game extends Activity implements SurfaceHolder.Callback,
     }
 
     private void startConnectionWithSurface(Surface surface) {
+        LimeLog.info("Game.startConnectionWithSurface: surface=" + surface + ", attemptedConnection=" + attemptedConnection + ", connected=" + connected + ", surfaceValid=" + (surface != null ? surface.isValid() : false));
         if (surface == null || attemptedConnection) {
+            LimeLog.warning("Game.startConnectionWithSurface: ABORT surface=" + surface + " attemptedConnection=" + attemptedConnection);
             return;
         }
 
         attemptedConnection = true;
         UiHelper.notifyStreamConnecting(Game.this);
+        LimeLog.info("Game.startConnectionWithSurface: calling setRenderSurface");
         decoderRenderer.setRenderSurface(surface);
+        LimeLog.info("Game.startConnectionWithSurface: calling conn.start");
         conn.start(new AndroidAudioRenderer(Game.this, prefConfig.enableAudioFx),
                 decoderRenderer, Game.this);
     }

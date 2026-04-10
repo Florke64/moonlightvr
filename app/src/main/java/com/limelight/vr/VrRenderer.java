@@ -7,6 +7,9 @@ import javax.microedition.khronos.egl.EGLConfig;
 import android.opengl.GLSurfaceView;
 import android.opengl.GLSurfaceView.Renderer;
 import android.view.Surface;
+import android.view.SurfaceHolder;
+
+import com.limelight.LimeLog;
 
 import javax.microedition.khronos.opengles.GL10;
 
@@ -38,10 +41,12 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
 
     @Override
     public void onSurfaceCreated(GL10 gl10, EGLConfig eglConfig) {
+        LimeLog.info("VrRenderer.onSurfaceCreated: oldVideoSurface=" + videoSurface + " oldSurfaceTexture=" + surfaceTexture);
         int textureId = nativeOnSurfaceCreated(nativeHandle);
         surfaceTexture = new SurfaceTexture(textureId);
         surfaceTexture.setOnFrameAvailableListener(this);
         videoSurface = new Surface(surfaceTexture);
+        LimeLog.info("VrRenderer.onSurfaceCreated: newVideoSurface=" + videoSurface + " isValid=" + videoSurface.isValid());
         if (surfaceListener != null) {
             surfaceListener.onSurfaceReady(videoSurface);
         }
@@ -49,6 +54,7 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
 
     @Override
     public void onSurfaceChanged(GL10 gl10, int width, int height) {
+        LimeLog.info("VrRenderer.onSurfaceChanged: width=" + width + " height=" + height);
         nativeOnSurfaceChanged(nativeHandle, width, height);
     }
 
@@ -65,16 +71,19 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
 
     @Override
     public void onFrameAvailable(SurfaceTexture surfaceTexture) {
+        LimeLog.info("VrRenderer.onFrameAvailable: surfaceTexture=" + surfaceTexture);
         frameAvailable = true;
         glSurfaceView.requestRender();
     }
 
     public void onResume() {
+        LimeLog.info("VrRenderer.onResume");
         glSurfaceView.onResume();
         nativeOnResume(nativeHandle);
     }
 
     public void onPause() {
+        LimeLog.info("VrRenderer.onPause");
         nativeOnPause(nativeHandle);
         glSurfaceView.onPause();
     }
