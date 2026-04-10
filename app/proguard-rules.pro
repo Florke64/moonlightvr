@@ -26,3 +26,8 @@
 # jMDNS
 -dontwarn javax.jmdns.impl.DNSCache
 -dontwarn org.slf4j.**
+
+# Preserve Cardboard SDK classes for JNI
+-keep class com.google.cardboard.sdk.** { *; }
+-keep class com.google.cardboard.sdk.qrcode.** { *; }
+-dontwarn com.google.cardboard.sdk.**
