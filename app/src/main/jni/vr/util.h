@@ -31,6 +31,9 @@ struct Quatf {
 
 Matrix4x4 GetMatrixFromGlArray(const float* gl_array);
 Matrix4x4 GetTranslationMatrix(const std::array<float, 3>& translation);
+Matrix4x4 GetScaleMatrix(const std::array<float, 3>& scale);
+Matrix4x4 GetViewMatrixFromPose(const std::array<float, 3>& translation,
+                                const Quatf& orientation);
 float AngleBetweenVectors(const std::array<float, 4>& vec1,
                           const std::array<float, 4>& vec2);
 int64_t GetBootTimeNano();

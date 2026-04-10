@@ -28,7 +28,8 @@ class VrMoonlightApp {
   void ResetRenderTarget();
   void UpdateRenderTarget();
   bool UpdateDeviceParams();
-  void RenderVideoToTexture();
+  void RenderVideoToTexture(const std::array<float, 3>& head_position,
+                            const std::array<float, 4>& head_orientation);
   void DestroyCardboardResources();
 
   JavaVM* java_vm_;
@@ -57,8 +58,10 @@ class VrMoonlightApp {
   GLint texcoord_attrib_;
   GLint texture_transform_uniform_;
   GLint sampler_uniform_;
+  GLint mvp_uniform_;
 
   float texture_transform_[16];
+  Matrix4x4 model_matrix_;
 };
 
 }  // namespace moonlight_vr

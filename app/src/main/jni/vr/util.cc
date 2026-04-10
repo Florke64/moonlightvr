@@ -50,7 +50,11 @@ std::array<float, 4> Matrix4x4::operator*(const std::array<float, 4>& vec) const
 
 std::array<float, 16> Matrix4x4::ToGlArray() const {
   std::array<float, 16> result;
-  std::memcpy(result.data(), m, sizeof(m));
+  for (int row = 0; row < 4; ++row) {
+    for (int col = 0; col < 4; ++col) {
+      result[col * 4 + row] = m[row][col];
+    }
+  }
   return result;
 }
 
@@ -90,9 +94,9 @@ Matrix4x4 Quatf::ToMatrix() const {
 
 Matrix4x4 GetMatrixFromGlArray(const float* gl_array) {
   Matrix4x4 matrix;
-  for (int i = 0; i < 4; ++i) {
-    for (int j = 0; j < 4; ++j) {
-      matrix.m[i][j] = gl_array[i * 4 + j];
+  for (int col = 0; col < 4; ++col) {
+    for (int row = 0; row < 4; ++row) {
+      matrix.m[row][col] = gl_array[col * 4 + row];
     }
   }
   return matrix;
@@ -107,6 +111,46 @@ Matrix4x4 GetTranslationMatrix(const std::array<float, 3>& translation) {
   matrix.m[1][3] = translation[1];
   matrix.m[2][3] = translation[2];
   return matrix;
+}
+
+Matrix4x4 GetScaleMatrix(const std::array<float, 3>& scale) {
+  Matrix4x4 matrix;
+  for (int i = 0; i < 4; ++i) {
+    matrix.m[i][i] = 1.0f;
+  }
+  matrix.m[0][0] = scale[0];
+  matrix.m[1][1] = scale[1];
+  matrix.m[2][2] = scale[2];
+  return matrix;
+}
+
+Matrix4x4 GetViewMatrixFromPose(const std::array<float, 3>& translation,
+                                const Quatf& orientation) {
+  Matrix4x4 rotation = orientation.ToMatrix();
+  Matrix4x4 view;
+  for (int i = 0; i < 4; ++i) {
+    view.m[i][i] = 1.0f;
+  }
+
+  // Transpose rotation component to invert orientation.
+  for (int row = 0; row < 3; ++row) {
+    for (int col = 0; col < 3; ++col) {
+      view.m[row][col] = rotation.m[col][row];
+    }
+  }
+
+  // Compute translated camera position.
+  view.m[0][3] = -(view.m[0][0] * translation[0] +
+                  view.m[0][1] * translation[1] +
+                  view.m[0][2] * translation[2]);
+  view.m[1][3] = -(view.m[1][0] * translation[0] +
+                  view.m[1][1] * translation[1] +
+                  view.m[1][2] * translation[2]);
+  view.m[2][3] = -(view.m[2][0] * translation[0] +
+                  view.m[2][1] * translation[1] +
+                  view.m[2][2] * translation[2]);
+
+  return view;
 }
 
 float AngleBetweenVectors(const std::array<float, 4>& vec1,
