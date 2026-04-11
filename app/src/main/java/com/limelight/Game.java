@@ -561,8 +561,10 @@ public class Game extends Activity implements SurfaceHolder.Callback,
             return;
         }
 
-        // The connection will be started when the surface gets created
-        streamView.getHolder().addCallback(this);
+        // The connection will be started when the surface gets created (only for flat screen)
+        if (!vrMode) {
+            streamView.getHolder().addCallback(this);
+        }
     }
 
     private void setPreferredOrientationForCurrentDisplay() {
@@ -2552,6 +2554,10 @@ public class Game extends Activity implements SurfaceHolder.Callback,
 
     @Override
     public void surfaceCreated(SurfaceHolder holder) {
+        if (vrMode) {
+            LimeLog.info("Game.surfaceCreated: ignored in vrMode");
+            return;
+        }
         float desiredFrameRate;
 
         surfaceCreated = true;
@@ -2619,6 +2625,10 @@ public class Game extends Activity implements SurfaceHolder.Callback,
 
     @Override
     public void surfaceDestroyed(SurfaceHolder holder) {
+        if (vrMode) {
+            LimeLog.info("Game.surfaceDestroyed: ignored in vrMode");
+            return;
+        }
         if (!surfaceCreated) {
             throw new IllegalStateException("Surface destroyed before creation!");
         }
