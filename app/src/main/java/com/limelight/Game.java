@@ -182,6 +182,20 @@ public class Game extends Activity implements SurfaceHolder.Callback,
             connectedToUsbDriverService = false;
         }
     };
+    private boolean connectedToVrControlService = false;
+    private final ServiceConnection vrControlServiceConnection = new ServiceConnection() {
+        @Override
+        public void onServiceConnected(ComponentName componentName, IBinder iBinder) {
+            VrControlService.LocalBinder binder = (VrControlService.LocalBinder) iBinder;
+            binder.getService().setVrRenderer(vrRenderer);
+            connectedToVrControlService = true;
+        }
+
+        @Override
+        public void onServiceDisconnected(ComponentName componentName) {
+            connectedToVrControlService = false;
+        }
+    };
 
     public static final String EXTRA_HOST = "Host";
     public static final String EXTRA_PORT = "Port";
@@ -240,8 +254,8 @@ vrMode = getIntent().getBooleanExtra(EXTRA_ENABLE_VR, false) ||
                 vrSurfaceView.setEGLContextClientVersion(2);
                 vrSurfaceView.setRenderer(vrRenderer);
                 vrSurfaceView.setRenderMode(GLSurfaceView.RENDERMODE_CONTINUOUSLY);
-                
-                startVrControlService();
+
+                startVrControlService(vrRenderer);
             }
             else {
                 vrSurfaceView.setVisibility(View.GONE);
@@ -1089,6 +1103,7 @@ vrMode = getIntent().getBooleanExtra(EXTRA_ENABLE_VR, false) ||
 
         if (vrMode) {
             stopVrControlService();
+            unbindVrControlService();
         }
 
         if (vrRenderer != null) {
@@ -2785,13 +2800,18 @@ vrMode = getIntent().getBooleanExtra(EXTRA_ENABLE_VR, false) ||
         }
     }
 
-    private void startVrControlService() {
+    private void startVrControlService(VrRenderer renderer) {
         if (vrMode && prefConfig != null && prefConfig.enableVr) {
             Intent intent = new Intent(this, VrControlService.class);
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 startForegroundService(intent);
             } else {
                 startService(intent);
+            }
+            vrRenderer = renderer;
+            if (!connectedToVrControlService) {
+                bindService(new Intent(this, VrControlService.class),
+                        vrControlServiceConnection, Service.BIND_AUTO_CREATE);
             }
         }
     }
@@ -2800,5 +2820,18 @@ vrMode = getIntent().getBooleanExtra(EXTRA_ENABLE_VR, false) ||
         Intent intent = new Intent(this, VrControlService.class);
         intent.setAction("STOP");
         startService(intent);
+    }
+
+    private void unbindVrControlService() {
+        if (!connectedToVrControlService) {
+            return;
+        }
+
+        try {
+            unbindService(vrControlServiceConnection);
+        } catch (IllegalArgumentException ignored) {
+        } finally {
+            connectedToVrControlService = false;
+        }
     }
 }

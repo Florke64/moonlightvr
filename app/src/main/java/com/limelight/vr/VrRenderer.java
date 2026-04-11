@@ -113,6 +113,14 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
         nativeSetScreenSize(nativeHandle, sizeMultiplier);
     }
 
+    public void adjustScreenDistance(float deltaMeters) {
+        nativeAdjustScreenDistance(nativeHandle, deltaMeters);
+    }
+
+    public void adjustScreenSize(float deltaMultiplier) {
+        nativeAdjustScreenSize(nativeHandle, deltaMultiplier);
+    }
+
     public void recenterView() {
         nativeRecenterView(nativeHandle);
     }
@@ -127,5 +135,7 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
     private native void nativeOnResume(long handle);
     private native void nativeSetScreenDistance(long handle, float distanceMeters);
     private native void nativeSetScreenSize(long handle, float sizeMultiplier);
+    private native void nativeAdjustScreenDistance(long handle, float deltaMeters);
+    private native void nativeAdjustScreenSize(long handle, float deltaMultiplier);
     private native void nativeRecenterView(long handle);
 }

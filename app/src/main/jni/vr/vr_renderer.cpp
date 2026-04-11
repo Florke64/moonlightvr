@@ -598,6 +598,26 @@ void VrMoonlightApp::SetScreenSize(float sizeMultiplier) {
   UpdateModelMatrix();
 }
 
+void VrMoonlightApp::AdjustScreenDistance(float deltaMeters) {
+  screen_distance_meters_ += deltaMeters;
+  if (screen_distance_meters_ < kMinScreenDistanceMeters) {
+    screen_distance_meters_ = kMinScreenDistanceMeters;
+  } else if (screen_distance_meters_ > kMaxScreenDistanceMeters) {
+    screen_distance_meters_ = kMaxScreenDistanceMeters;
+  }
+  UpdateModelMatrix();
+}
+
+void VrMoonlightApp::AdjustScreenSize(float deltaMultiplier) {
+  screen_size_multiplier_ += deltaMultiplier;
+  if (screen_size_multiplier_ < 0.25f) {
+    screen_size_multiplier_ = 0.25f;
+  } else if (screen_size_multiplier_ > 2.0f) {
+    screen_size_multiplier_ = 2.0f;
+  }
+  UpdateModelMatrix();
+}
+
 void VrMoonlightApp::UpdateModelMatrix() {
   const float half_width = kScreenWidthMeters * 0.5f * screen_size_multiplier_;
   const float half_height = half_width / kScreenAspectRatio;

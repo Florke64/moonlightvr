@@ -25,6 +25,8 @@ class VrMoonlightApp {
   void OnResume();
   void SetScreenDistance(float meters);
   void SetScreenSize(float sizeMultiplier);
+  void AdjustScreenDistance(float deltaMeters);
+  void AdjustScreenSize(float deltaMultiplier);
   void SetCurrentFramePose(const std::array<float, 4>& orientation);
   void RecenterView();
 

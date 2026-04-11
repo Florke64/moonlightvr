@@ -43,11 +43,16 @@ public class VrControlServer extends NanoHTTPD {
     private static final String KEYSTORE_FILE = "vr_keystore.p12";
 
     private final Context context;
+    private VrRenderer vrRenderer;
 
     public VrControlServer(Context context) throws Exception {
         super(DEFAULT_PORT);
         this.context = context.getApplicationContext();
         initSecureServer();
+    }
+
+    public void setVrRenderer(VrRenderer renderer) {
+        this.vrRenderer = renderer;
     }
 
     private void initSecureServer() throws Exception {
@@ -118,11 +123,44 @@ public class VrControlServer extends NanoHTTPD {
         return ks;
     }
 
+    private static final float ZOOM_STEP = 0.2f;
+    private static final float SCREEN_SIZE_STEP = 0.1f;
+
     @Override
     public Response serve(IHTTPSession session) {
         String uri = session.getUri();
         if (uri.equals("/") || uri.equals("/index.html")) {
             return serveHtml();
+        } else if (uri.equals("/recenter")) {
+            if (vrRenderer != null) {
+                vrRenderer.recenterView();
+                return newFixedLengthResponse(Response.Status.OK, "application/json", "{\"status\":\"ok\"}");
+            }
+            return newFixedLengthResponse(Response.Status.SERVICE_UNAVAILABLE, "application/json", "{\"error\":\"no renderer\"}");
+        } else if (uri.equals("/zoomin")) {
+            if (vrRenderer != null) {
+                vrRenderer.adjustScreenDistance(-ZOOM_STEP);
+                return newFixedLengthResponse(Response.Status.OK, "application/json", "{\"status\":\"ok\",\"action\":\"zoomin\"}");
+            }
+            return newFixedLengthResponse(Response.Status.SERVICE_UNAVAILABLE, "application/json", "{\"error\":\"no renderer\"}");
+        } else if (uri.equals("/zoomout")) {
+            if (vrRenderer != null) {
+                vrRenderer.adjustScreenDistance(ZOOM_STEP);
+                return newFixedLengthResponse(Response.Status.OK, "application/json", "{\"status\":\"ok\",\"action\":\"zoomout\"}");
+            }
+            return newFixedLengthResponse(Response.Status.SERVICE_UNAVAILABLE, "application/json", "{\"error\":\"no renderer\"}");
+        } else if (uri.equals("/screenup")) {
+            if (vrRenderer != null) {
+                vrRenderer.adjustScreenSize(SCREEN_SIZE_STEP);
+                return newFixedLengthResponse(Response.Status.OK, "application/json", "{\"status\":\"ok\",\"action\":\"screenup\"}");
+            }
+            return newFixedLengthResponse(Response.Status.SERVICE_UNAVAILABLE, "application/json", "{\"error\":\"no renderer\"}");
+        } else if (uri.equals("/screendown")) {
+            if (vrRenderer != null) {
+                vrRenderer.adjustScreenSize(-SCREEN_SIZE_STEP);
+                return newFixedLengthResponse(Response.Status.OK, "application/json", "{\"status\":\"ok\",\"action\":\"screendown\"}");
+            }
+            return newFixedLengthResponse(Response.Status.SERVICE_UNAVAILABLE, "application/json", "{\"error\":\"no renderer\"}");
         }
         return serveStaticAsset(uri);
     }
@@ -131,13 +169,27 @@ public class VrControlServer extends NanoHTTPD {
         String html = "<!DOCTYPE html><html><head><meta charset=\"utf-8\">" +
             "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">" +
             "<title>MoonlightVR Control</title>" +
-            "<style>body{font-family:sans-serif;margin:0;padding:20px;background:#111;color:#eee}" +
+            "<style>" +
+            "body{font-family:sans-serif;margin:0;padding:20px;background:#111;color:#eee}" +
             "h1{color:#00d8ff}.card{background:#222;padding:20px;border-radius:8px;margin:10px 0}" +
-            ".status{color:#4f4}</style></head>" +
+            ".status{color:#4f4}.btn{display:block;width:100%;padding:15px;margin:5px 0;" +
+            "background:#00d8ff;border:none;border-radius:4px;color:#111;font-size:16px;font-weight:bold;cursor:pointer}" +
+            ".btn:active{background:#00b8e6}.row{display:flex;gap:10px}.row .btn{flex:1}" +
+            "input[type=range]{width:100%;margin:15px 0}</style></head>" +
             "<body><h1>MoonlightVR</h1>" +
             "<div class=\"card\"><h3>Version: " + VERSION + "</h3>" +
-            "<p>VR Control Panel</p>" +
             "<p class=\"status\">HTTPS Server Running on port 8555</p></div>" +
+            "<div class=\"card\"><h2>Screen Position</h2>" +
+            "<div class=\"row\"><button class=\"btn\" onclick=\"fetch('/zoomin')\">Zoom In</button>" +
+            "<button class=\"btn\" onclick=\"fetch('/zoomout')\">Zoom Out</button></div>" +
+            "<p>Closer screen = more immersive, farther = less strain</p></div>" +
+            "<div class=\"card\"><h2>Screen Size</h2>" +
+            "<div class=\"row\"><button class=\"btn\" onclick=\"fetch('/screenup')\">Bigger</button>" +
+            "<button class=\"btn\" onclick=\"fetch('/screendown')\">Smaller</button></div>" +
+            "<p>Adjust virtual screen size</p></div>" +
+            "<div class=\"card\"><h2>View</h2>" +
+            "<button class=\"btn\" onclick=\"fetch('/recenter')\">Recenter View</button>" +
+            "<p>Reset view orientation to center</p></div>" +
             "</body></html>";
         return newFixedLengthResponse(Response.Status.OK, "text/html", html);
     }

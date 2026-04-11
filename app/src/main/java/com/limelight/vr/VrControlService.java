@@ -22,10 +22,18 @@ public class VrControlService extends Service {
     private VrControlServer server;
     private ExecutorService executor;
     private boolean isRunning = false;
+    private VrRenderer vrRenderer;
 
     public class LocalBinder extends Binder {
         public VrControlService getService() {
             return VrControlService.this;
+        }
+    }
+
+    public void setVrRenderer(VrRenderer renderer) {
+        this.vrRenderer = renderer;
+        if (server != null) {
+            server.setVrRenderer(renderer);
         }
     }
 
@@ -66,6 +74,9 @@ public class VrControlService extends Service {
         executor.execute(() -> {
             try {
                 server = new VrControlServer(getApplicationContext());
+                if (vrRenderer != null) {
+                    server.setVrRenderer(vrRenderer);
+                }
                 server.start();
                 isRunning = true;
             } catch (Exception e) {
