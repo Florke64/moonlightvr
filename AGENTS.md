@@ -1,7 +1,7 @@
 # AGENTS
 
 ## Repository Goal
-This fork of the Moonlight Android client adds native support for Google Cardboard VR rendering so streamed Sunshine/Moonlight gameplay appears on a virtual TV screen. The VR screen is anchored in 3D space with proper head tracking and adjustable distance. The intent is to keep the existing flat-screen pipeline intact while layering in the VR experience when the user opts in.
+This fork of the Moonlight Android client (**MoonlightVR**) adds native support for Google Cardboard VR rendering so streamed Sunshine/Moonlight gameplay appears on a virtual TV screen. The VR screen is anchored in 3D space with proper head tracking and adjustable distance. The intent is to keep the existing flat-screen pipeline intact while layering in the VR experience.
 
 ## Key Concepts
 - **Base project:** The original `moonlight-android` client with its multi-activity flow, StreamView/SurfaceHolder rendering, decoder pipeline, and JNI bridge (including `moonlight-core`).
