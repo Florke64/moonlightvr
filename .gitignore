@@ -4,6 +4,7 @@
 *.aab
 output.json
 output-metadata.json
+static-analysis/
 out/
 
 # files for the dex VM

@@ -30,7 +30,16 @@ This fork of the Moonlight Android client (**MoonlightVR**) adds native support 
 
 ## For New Agents
 - **Important:** Do NOT modify or commit changes to git submodules (especially `vendor/cardboard/`). Only operate on the main `moonlight-android` branch code. Submodule updates should only be done manually by the repository owner.
-- **Build Requirements:** Building this project requires Java 17 (e.g., for `jlink`). Ensure you build with: `export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64 && ./gradlew :app:assembleDebug`.
+- **Build Requirements:** Building this project requires Java 17+ (Java 25 recommended). Ensure you build with:
+  ```bash
+  export JAVA_HOME=/usr/lib/jvm/java-25-openjdk-amd64 && ./gradlew :app:assembleDebug
+  ```
+- **Toolchain Versions:**
+  - **AGP:** 8.13.2 (Android Gradle Plugin)
+  - **Gradle:** 8.13
+  - **Java:** 25 (also works with Java 17-24)
+  - **ProGuard/R8:** Uses `proguard-android-optimize.txt` (not the deprecated `proguard-android.txt`)
+  - **compileSdk:** 35 (targetSdk: 35, minSdk: 21)
 - Start with `Game` and `VrRenderer` to understand how the Java layer chooses paths and passes parameters to JNI.
 - When modifying rendering logic in `vr_renderer.cpp`, remember that the `model_matrix` handles orientation correction (Y-axis flip) and distance scaling, while the MVP matrix handles the Cardboard 3DOF head tracking.
 - Keep the Cardboard submodule intact—avoid committing IDE/config artifacts, and run `git submodule update --init --recursive` if dependencies appear missing.
