@@ -1785,6 +1785,10 @@ vrMode = getIntent().getBooleanExtra(EXTRA_ENABLE_VR, false) ||
         }
     }
 
+    private boolean shouldBlockTouchInput() {
+        return vrMode && prefConfig != null && prefConfig.enableVr;
+    }
+
     private boolean sendTouchEventForPointer(View view, MotionEvent event, byte eventType, int pointerIndex) {
         float[] normalizedCoords = getStreamViewRelativeNormalizedXY(view, event, pointerIndex);
         float[] normalizedContactArea = getStreamViewNormalizedContactArea(event, pointerIndex);
@@ -1796,6 +1800,9 @@ vrMode = getIntent().getBooleanExtra(EXTRA_ENABLE_VR, false) ||
     }
 
     private boolean trySendTouchEvent(View view, MotionEvent event) {
+        if (shouldBlockTouchInput()) {
+            return false;
+        }
         byte eventType = getLiTouchTypeFromEvent(event);
         if (eventType < 0) {
             return false;
@@ -1832,6 +1839,13 @@ vrMode = getIntent().getBooleanExtra(EXTRA_ENABLE_VR, false) ||
 
         int eventSource = event.getSource();
         int deviceSources = event.getDevice() != null ? event.getDevice().getSources() : 0;
+        if (shouldBlockTouchInput() && ((eventSource & InputDevice.SOURCE_CLASS_POINTER) != 0 ||
+                (eventSource & InputDevice.SOURCE_CLASS_POSITION) != 0 ||
+                eventSource == InputDevice.SOURCE_MOUSE_RELATIVE ||
+                eventSource == InputDevice.SOURCE_MOUSE ||
+                eventSource == 12290)) {
+            return true;
+        }
         if ((eventSource & InputDevice.SOURCE_CLASS_JOYSTICK) != 0) {
             if (controllerHandler.handleMotionEvent(event)) {
                 return true;
