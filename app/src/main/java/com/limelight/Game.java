@@ -37,6 +37,7 @@ import com.limelight.utils.ShortcutHelper;
 import com.limelight.utils.SpinnerDialog;
 import com.limelight.utils.UiHelper;
 import com.limelight.vr.VrRenderer;
+import com.limelight.vr.VrControlService;
 
 import android.annotation.SuppressLint;
 import android.annotation.TargetApi;
@@ -228,7 +229,7 @@ public class Game extends Activity implements SurfaceHolder.Callback,
         prefConfig = PreferenceConfiguration.readPreferences(this);
         tombstonePrefs = Game.this.getSharedPreferences("DecoderTombstone", 0);
 
-            vrMode = getIntent().getBooleanExtra(EXTRA_ENABLE_VR, false) ||
+vrMode = getIntent().getBooleanExtra(EXTRA_ENABLE_VR, false) ||
                     (prefConfig != null && prefConfig.enableVr);
             vrSurfaceView = findViewById(R.id.vrSurfaceView);
             if (vrMode) {
@@ -239,10 +240,12 @@ public class Game extends Activity implements SurfaceHolder.Callback,
                 vrSurfaceView.setEGLContextClientVersion(2);
                 vrSurfaceView.setRenderer(vrRenderer);
                 vrSurfaceView.setRenderMode(GLSurfaceView.RENDERMODE_CONTINUOUSLY);
+                
+                startVrControlService();
             }
-        else {
-            vrSurfaceView.setVisibility(View.GONE);
-        }
+            else {
+                vrSurfaceView.setVisibility(View.GONE);
+            }
 
         // Start the spinner
         spinner = SpinnerDialog.displayDialog(this, getResources().getString(R.string.conn_establishing_title),
@@ -1083,6 +1086,10 @@ public class Game extends Activity implements SurfaceHolder.Callback,
 
         // Destroy the capture provider
         inputCaptureProvider.destroy();
+
+        if (vrMode) {
+            stopVrControlService();
+        }
 
         if (vrRenderer != null) {
             vrRenderer.release();
@@ -2762,5 +2769,22 @@ public class Game extends Activity implements SurfaceHolder.Callback,
             default:
                 return false;
         }
+    }
+
+    private void startVrControlService() {
+        if (vrMode && prefConfig != null && prefConfig.enableVr) {
+            Intent intent = new Intent(this, VrControlService.class);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(intent);
+            } else {
+                startService(intent);
+            }
+        }
+    }
+
+    private void stopVrControlService() {
+        Intent intent = new Intent(this, VrControlService.class);
+        intent.setAction("STOP");
+        startService(intent);
     }
 }

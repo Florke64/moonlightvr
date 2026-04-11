@@ -1,0 +1,169 @@
+package com.limelight.vr;
+
+import android.content.Context;
+import android.content.SharedPreferences;
+import android.util.Base64;
+
+import com.limelight.BuildConfig;
+
+import fi.iki.elonen.NanoHTTPD;
+
+import org.bouncycastle.asn1.x500.X500Name;
+import org.bouncycastle.cert.X509v3CertificateBuilder;
+import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
+import org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder;
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
+import org.bouncycastle.operator.ContentSigner;
+import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.math.BigInteger;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.security.KeyStore;
+import java.security.Provider;
+import java.security.SecureRandom;
+import java.security.cert.Certificate;
+import java.security.cert.X509Certificate;
+import java.util.Calendar;
+import java.util.Date;
+
+import javax.net.ssl.KeyManagerFactory;
+import javax.net.ssl.SSLContext;
+
+public class VrControlServer extends NanoHTTPD {
+    private static final int DEFAULT_PORT = 8555;
+    private static final String VERSION = BuildConfig.VERSION_NAME;
+    private static final String KEY_ALIAS = "MoonlightVrServerKey";
+    private static final String PREF_NAME = "VrControlPrefs";
+    private static final String PREF_KEY_PASS = "keystore_pass";
+    private static final String KEYSTORE_FILE = "vr_keystore.p12";
+
+    private final Context context;
+
+    public VrControlServer(Context context) throws Exception {
+        super(DEFAULT_PORT);
+        this.context = context.getApplicationContext();
+        initSecureServer();
+    }
+
+    private void initSecureServer() throws Exception {
+        KeyStore keyStore = loadOrGenerateKeyStore();
+
+        SharedPreferences prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
+        char[] password = prefs.getString(PREF_KEY_PASS, "").toCharArray();
+
+        KeyManagerFactory kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
+        kmf.init(keyStore, password);
+
+        SSLContext sslContext = SSLContext.getInstance("TLS");
+        sslContext.init(kmf.getKeyManagers(), null, null);
+        makeSecure(sslContext.getServerSocketFactory(), null);
+    }
+
+    private KeyStore loadOrGenerateKeyStore() throws Exception {
+        File file = new File(context.getFilesDir(), KEYSTORE_FILE);
+        SharedPreferences prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
+        String passwordStr = prefs.getString(PREF_KEY_PASS, null);
+
+        if (passwordStr == null || !file.exists()) {
+            byte[] randomBytes = new byte[16];
+            new SecureRandom().nextBytes(randomBytes);
+            passwordStr = Base64.encodeToString(randomBytes, Base64.NO_WRAP);
+            prefs.edit().putString(PREF_KEY_PASS, passwordStr).apply();
+
+            Provider bcProvider = new BouncyCastleProvider();
+
+            KeyPairGenerator keyGen = KeyPairGenerator.getInstance("RSA");
+            keyGen.initialize(2048, new SecureRandom());
+            KeyPair keyPair = keyGen.generateKeyPair();
+
+            long now = System.currentTimeMillis();
+            Date startDate = new Date(now);
+            Calendar calendar = Calendar.getInstance();
+            calendar.setTime(startDate);
+            calendar.add(Calendar.YEAR, 5);
+            Date endDate = calendar.getTime();
+
+            X500Name subject = new X500Name("CN=MoonlightVR Control, O=Limelight, C=US");
+            BigInteger serial = BigInteger.valueOf(now);
+
+            X509v3CertificateBuilder certBuilder = new JcaX509v3CertificateBuilder(
+                    subject, serial, startDate, endDate, subject, keyPair.getPublic());
+
+            ContentSigner signer = new JcaContentSignerBuilder("SHA256WithRSAEncryption")
+                    .setProvider(bcProvider)
+                    .build(keyPair.getPrivate());
+
+            X509Certificate cert = new JcaX509CertificateConverter()
+                    .setProvider(bcProvider)
+                    .getCertificate(certBuilder.build(signer));
+
+            KeyStore ks = KeyStore.getInstance("PKCS12");
+            ks.load(null, null);
+            ks.setKeyEntry(KEY_ALIAS, keyPair.getPrivate(), passwordStr.toCharArray(), new Certificate[]{cert});
+
+            try (FileOutputStream fos = new FileOutputStream(file)) {
+                ks.store(fos, passwordStr.toCharArray());
+            }
+        }
+
+        KeyStore ks = KeyStore.getInstance("PKCS12");
+        try (FileInputStream fis = new FileInputStream(file)) {
+            ks.load(fis, passwordStr.toCharArray());
+        }
+        return ks;
+    }
+
+    @Override
+    public Response serve(IHTTPSession session) {
+        String uri = session.getUri();
+        if (uri.equals("/") || uri.equals("/index.html")) {
+            return serveHtml();
+        }
+        return serveStaticAsset(uri);
+    }
+
+    private Response serveHtml() {
+        String html = "<!DOCTYPE html><html><head><meta charset=\"utf-8\">" +
+            "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">" +
+            "<title>MoonlightVR Control</title>" +
+            "<style>body{font-family:sans-serif;margin:0;padding:20px;background:#111;color:#eee}" +
+            "h1{color:#00d8ff}.card{background:#222;padding:20px;border-radius:8px;margin:10px 0}" +
+            ".status{color:#4f4}</style></head>" +
+            "<body><h1>MoonlightVR</h1>" +
+            "<div class=\"card\"><h3>Version: " + VERSION + "</h3>" +
+            "<p>VR Control Panel</p>" +
+            "<p class=\"status\">HTTPS Server Running on port 8555</p></div>" +
+            "</body></html>";
+        return newFixedLengthResponse(Response.Status.OK, "text/html", html);
+    }
+
+    private Response serveStaticAsset(String uri) {
+        try {
+            InputStream is = getClass().getResourceAsStream("/assets/vr-control" + uri);
+            if (is != null) {
+                String mime = getMimeType(uri);
+                return newChunkedResponse(Response.Status.OK, mime, is);
+            }
+        } catch (Exception ignored) {}
+        return newFixedLengthResponse(Response.Status.NOT_FOUND, "text/plain", "Not Found");
+    }
+
+    private String getMimeType(String uri) {
+        if (uri.endsWith(".css")) return "text/css";
+        if (uri.endsWith(".js")) return "application/javascript";
+        if (uri.endsWith(".png")) return "image/png";
+        if (uri.endsWith(".jpg") || uri.endsWith(".jpeg")) return "image/jpeg";
+        if (uri.endsWith(".svg")) return "image/svg+xml";
+        if (uri.endsWith(".json")) return "application/json";
+        return "text/plain";
+    }
+
+    public int getPort() {
+        return DEFAULT_PORT;
+    }
+}

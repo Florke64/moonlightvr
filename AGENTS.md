@@ -35,3 +35,18 @@ This fork of the Moonlight Android client adds native support for Google Cardboa
 - When modifying rendering logic in `vr_renderer.cpp`, remember that the `model_matrix` handles orientation correction (Y-axis flip) and distance scaling, while the MVP matrix handles the Cardboard 3DOF head tracking.
 - Keep the Cardboard submodule intact—avoid committing IDE/config artifacts, and run `git submodule update --init --recursive` if dependencies appear missing.
 - Any UI strings, preferences, or Android lifecycle tweaks should be done in the `app/src/main` layer so the experience stays cohesive for both VR and non-VR users.
+
+## Integrated HTTPS Server
+The app includes an embedded HTTPS server for VR control panel access from LAN devices.
+
+- **Server:** NanoHTTPD-based lightweight HTTP server (via Gradle dependency `org.nanohttpd:nanohttpd:2.3.1`) with TLS support.
+- **Port:** 8555 (HTTPS with self-signed certificate).
+- **Auto-start:** Server starts automatically when VR mode is enabled (`checkbox_enable_vr` preference).
+- **Service:** `VrControlService` runs as a foreground service to keep the server alive.
+- **Certificate Architecture (Option A):** To bypass Conscrypt's hardware key padding restrictions, the server uses BouncyCastle (`bcprov-jdk18on` / `bcpkix-jdk18on`) to generate a software RSA KeyPair on first run.
+  - Generated KeyPair is wrapped in an X.509 certificate, saved to an app-private `PKCS12` keystore (`vr_keystore.p12`).
+  - The keystore is encrypted with a 16-byte secure random password stored in `SharedPreferences`, leaving no hardcoded credentials inside the APK.
+- **Static UI:** Version info is sourced from `BuildConfig.VERSION_NAME`.
+- **Files:**
+  - `app/src/main/java/com/limelight/vr/VrControlServer.java` - HTTP server implementation that builds the runtime keystore and serves the control page.
+  - `app/src/main/java/com/limelight/vr/VrControlService.java` - Foreground service managing the NanoHTTPD lifecycle.
