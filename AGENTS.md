@@ -29,6 +29,7 @@ This fork of the Moonlight Android client adds native support for Google Cardboa
 - Updated `ComputerDatabaseManager` resilience (directory creation, migration logging) to improve robustness after clearing app data.
 
 ## For New Agents
+- **Important:** Do NOT modify or commit changes to git submodules (especially `vendor/cardboard/`). Only operate on the main `moonlight-android` branch code. Submodule updates should only be done manually by the repository owner.
 - **Build Requirements:** Building this project requires Java 17 (e.g., for `jlink`). Ensure you build with: `export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64 && ./gradlew :app:assembleDebug`.
 - Start with `Game` and `VrRenderer` to understand how the Java layer chooses paths and passes parameters to JNI.
 - When modifying rendering logic in `vr_renderer.cpp`, remember that the `model_matrix` handles orientation correction (Y-axis flip) and distance scaling, while the MVP matrix handles the Cardboard 3DOF head tracking.

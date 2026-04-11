@@ -17,3 +17,12 @@ allprojects {
         maven { url 'https://jitpack.io' }
     }
 }
+
+project(':cardboard-sdk') {
+    afterEvaluate { sdk ->
+        def protoDir = new File(sdk.projectDir.parentFile, 'proto')
+        if (protoDir.exists()) {
+            sdk.android.sourceSets.main.proto.srcDirs = [protoDir]
+        }
+    }
+}
