@@ -145,6 +145,7 @@
 
     <!-- Preferences -->
     <string name="category_basic_settings">Basic Settings</string>
+    <string name="category_vr_settings">VR Mode</string>
     <string name="title_resolution_list">Video resolution</string>
     <string name="summary_resolution_list">Increase to improve image clarity. Decrease for better performance on lower end devices and slower networks.</string>
     <string name="title_native_res_dialog">Native Resolution Warning</string>
@@ -225,7 +226,7 @@
     <string name="title_checkbox_enable_pip">Enable Picture-in-Picture observer mode</string>
     <string name="summary_checkbox_enable_pip">Allows the stream to be viewed (but not controlled) while multitasking</string>
     <string name="title_checkbox_enable_vr">Enable VR mode</string>
-    <string name="summary_checkbox_enable_vr">Stream in Google Cardboard VR</string>
+    <string name="summary_checkbox_enable_vr">Use with the Cardboard VR set</string>
     <string name="title_seekbar_vr_screen_distance">VR screen distance</string>
     <string name="summary_seekbar_vr_screen_distance">Move the virtual screen closer or farther from your eyes.</string>
     <string name="suffix_seekbar_vr_distance">m</string>
