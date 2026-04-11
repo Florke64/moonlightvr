@@ -53,6 +53,7 @@ class VrMoonlightApp {
   int screen_height_;
 
   GLuint video_program_;
+  GLuint line_program_;
   GLuint video_texture_;
   GLuint render_texture_;
   GLuint framebuffer_;
@@ -62,6 +63,8 @@ class VrMoonlightApp {
   GLint texture_transform_uniform_;
   GLint sampler_uniform_;
   GLint mvp_uniform_;
+  GLint line_pos_attrib_;
+  GLint line_mvp_uniform_;
 
   float texture_transform_[16];
   Matrix4x4 model_matrix_;

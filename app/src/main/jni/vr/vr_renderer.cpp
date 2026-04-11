@@ -65,6 +65,24 @@ const char kVideoFragmentShader[] =
     "  gl_FragColor = texture2D(u_Texture, v_TexCoord);" "\n"
     "}";
 
+const char kLineVertexShader[] =
+    "attribute vec4 a_Position;"              "\n"
+    "uniform mat4 u_MVP;"                    "\n"
+    "void main() {"                           "\n"
+    "  gl_Position = u_MVP * a_Position;"     "\n"
+    "}";
+
+const char kLineFragmentShader[] =
+    "precision mediump float;"                "\n"
+    "void main() {"                           "\n"
+    "  gl_FragColor = vec4(0.627, 0.627, 0.627, 1.0);" "\n"
+    "}";
+
+const GLfloat kLineVertices[] = {
+    0.f, -1.f, 0.f,
+    0.f,  1.f, 0.f,
+};
+
 }  // namespace
 
 VrMoonlightApp::VrMoonlightApp(JavaVM* vm, jobject activity, jobject asset_manager)
@@ -80,6 +98,7 @@ VrMoonlightApp::VrMoonlightApp(JavaVM* vm, jobject activity, jobject asset_manag
       screen_width_(0),
       screen_height_(0),
       video_program_(0),
+      line_program_(0),
       video_texture_(0),
       render_texture_(0),
       framebuffer_(0),
@@ -89,6 +108,8 @@ VrMoonlightApp::VrMoonlightApp(JavaVM* vm, jobject activity, jobject asset_manag
       texture_transform_uniform_(-1),
       sampler_uniform_(-1),
       mvp_uniform_(-1),
+      line_pos_attrib_(-1),
+      line_mvp_uniform_(-1),
       model_matrix_(),
       screen_distance_meters_(kDefaultScreenDistanceMeters),
       screen_size_multiplier_(1.0f) {
@@ -133,6 +154,9 @@ VrMoonlightApp::~VrMoonlightApp() {
   if (video_texture_) {
     glDeleteTextures(1, &video_texture_);
   }
+  if (line_program_) {
+    glDeleteProgram(line_program_);
+  }
   if (framebuffer_) {
     glDeleteFramebuffers(1, &framebuffer_);
   }
@@ -169,6 +193,19 @@ jint VrMoonlightApp::OnSurfaceCreated(JNIEnv* env) {
                                                       "u_TextureTransform");
     mvp_uniform_ = glGetUniformLocation(video_program_, "u_MVP");
     sampler_uniform_ = glGetUniformLocation(video_program_, "u_Texture");
+  }
+
+  if (line_program_ == 0) {
+    GLuint line_vs = LoadGLShader(GL_VERTEX_SHADER, kLineVertexShader);
+    GLuint line_fs = LoadGLShader(GL_FRAGMENT_SHADER, kLineFragmentShader);
+    line_program_ = glCreateProgram();
+    glAttachShader(line_program_, line_vs);
+    glAttachShader(line_program_, line_fs);
+    glLinkProgram(line_program_);
+    glDeleteShader(line_vs);
+    glDeleteShader(line_fs);
+    line_pos_attrib_ = glGetAttribLocation(line_program_, "a_Position");
+    line_mvp_uniform_ = glGetUniformLocation(line_program_, "u_MVP");
   }
 
   if (video_texture_ == 0) {
@@ -222,6 +259,20 @@ void VrMoonlightApp::OnDrawFrame() {
   CardboardDistortionRenderer_renderEyeToDisplay(
       distortion_renderer_, 0, 0, 0, screen_width_, screen_height_,
       &left_eye_texture_description_, &right_eye_texture_description_);
+
+  glViewport(0, 0, screen_width_, screen_height_);
+  glDisable(GL_DEPTH_TEST);
+  Matrix4x4 identity;
+  for (int i = 0; i < 4; ++i) {
+    identity.m[i][i] = 1.f;
+  }
+  auto identity_gl = identity.ToGlArray();
+  glUseProgram(line_program_);
+  glUniformMatrix4fv(line_mvp_uniform_, 1, GL_FALSE, identity_gl.data());
+  glEnableVertexAttribArray(line_pos_attrib_);
+  glVertexAttribPointer(line_pos_attrib_, 3, GL_FLOAT, GL_FALSE, 0, kLineVertices);
+  glDrawArrays(GL_LINES, 0, 2);
+  glDisableVertexAttribArray(line_pos_attrib_);
 }
 
 void VrMoonlightApp::OnPause() {
@@ -358,7 +409,7 @@ void VrMoonlightApp::RenderVideoToTexture(
   glUseProgram(video_program_);
   glEnableVertexAttribArray(position_attrib_);
   glVertexAttribPointer(position_attrib_, 3, GL_FLOAT, GL_FALSE,
-                        sizeof(GLfloat) * 3, kQuadVertices);
+                         sizeof(GLfloat) * 3, kQuadVertices);
   glEnableVertexAttribArray(texcoord_attrib_);
   glVertexAttribPointer(texcoord_attrib_, 2, GL_FLOAT, GL_FALSE, 0,
                         kQuadTexCoords);
@@ -375,7 +426,7 @@ void VrMoonlightApp::RenderVideoToTexture(
   const int right_eye_width = screen_width_ - left_eye_width;
   const std::array<int, kEyeCount> viewport_x = {0, left_eye_width};
   const std::array<int, kEyeCount> viewport_width = {left_eye_width,
-                                                     right_eye_width};
+                                                   right_eye_width};
   const std::array<CardboardEye, kEyeCount> eyes = {kLeft, kRight};
 
   for (int eye_index = 0; eye_index < kEyeCount; ++eye_index) {
