@@ -25,6 +25,8 @@ class VrMoonlightApp {
   void OnResume();
   void SetScreenDistance(float meters);
   void SetScreenSize(float sizeMultiplier);
+  void SetCurrentFramePose(const std::array<float, 4>& orientation);
+  void RecenterView();
 
  private:
   void ResetRenderTarget();
@@ -70,6 +72,13 @@ class VrMoonlightApp {
   Matrix4x4 model_matrix_;
   float screen_distance_meters_;
   float screen_size_multiplier_;
+  std::array<float, 4> last_rendered_orientation_;
+  bool has_render_pose_;
+  std::array<float, 4> recenter_offset_;
+  bool has_recenter_offset_;
+  std::array<float, 4> current_recenter_offset_;
+  bool has_current_recenter_offset_;
+  int64_t last_recenter_update_nanos_;
 };
 
 }  // namespace moonlight_vr

@@ -76,6 +76,11 @@ Java_com_limelight_vr_VrRenderer_nativeOnPause(JNIEnv*, jobject, jlong handle) {
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_com_limelight_vr_VrRenderer_nativeOnResume(JNIEnv*, jobject, jlong handle) {
+Java_com_limelight_vr_VrRenderer_nativeOnResume(JNIEnv* env, jobject, jlong handle) {
   FromHandle(handle)->OnResume();
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_limelight_vr_VrRenderer_nativeRecenterView(JNIEnv*, jobject, jlong handle) {
+  FromHandle(handle)->RecenterView();
 }

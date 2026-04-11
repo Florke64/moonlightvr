@@ -27,6 +27,7 @@ struct Quatf {
   float w;
   Quatf(float x_, float y_, float z_, float w_);
   Matrix4x4 ToMatrix() const;
+  Quatf operator*(const Quatf& other) const;
 };
 
 Matrix4x4 GetMatrixFromGlArray(const float* gl_array);
@@ -41,6 +42,12 @@ GLuint LoadGLShader(GLenum type, const char* shader_source);
 void CheckGlError(const char* file, int line, const char* label);
 #define CHECK_GL_ERROR(label) \
   moonlight_vr::CheckGlError(__FILE__, __LINE__, label)
+
+void CalculateUvOffset(const std::array<float, 4>& q_render,
+                       const std::array<float, 4>& q_latest,
+                       float& out_u_offset,
+                       float& out_v_offset);
+Quatf SlerpQuaternions(const Quatf& a, const Quatf& b, float t);
 
 }  // namespace moonlight_vr
 

@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <iterator>
 #include <GLES2/gl2.h>
 #include <GLES2/gl2ext.h>
@@ -23,6 +24,7 @@ constexpr float kZNear = 0.1f;
 constexpr float kZFar = 100.0f;
 constexpr int kVelocityFilterCutoffFrequency = 6;
 constexpr int64_t kPredictionTimeWithoutVsyncNanos = 50000000LL;
+constexpr int64_t kDisplayPosePredictionNanos = 16000000LL;
 constexpr float kScreenWidthMeters = 2.2f;
 constexpr float kScreenAspectRatio = 16.0f / 9.0f;
 constexpr float kMinScreenDistanceMeters = 1.0f;
@@ -112,7 +114,14 @@ VrMoonlightApp::VrMoonlightApp(JavaVM* vm, jobject activity, jobject asset_manag
       line_mvp_uniform_(-1),
       model_matrix_(),
       screen_distance_meters_(kDefaultScreenDistanceMeters),
-      screen_size_multiplier_(1.0f) {
+      screen_size_multiplier_(1.0f),
+      last_rendered_orientation_{0.f, 0.f, 0.f, 1.f},
+      has_render_pose_(false),
+      recenter_offset_{0.f, 0.f, 0.f, 1.f},
+      has_recenter_offset_(false),
+      current_recenter_offset_{0.f, 0.f, 0.f, 1.f},
+      has_current_recenter_offset_(false),
+      last_recenter_update_nanos_(0) {
   std::fill(std::begin(texture_transform_), std::end(texture_transform_), 0.f);
   texture_transform_[0] = texture_transform_[5] = texture_transform_[10] =
       texture_transform_[15] = 1.f;
@@ -243,18 +252,94 @@ void VrMoonlightApp::OnDrawFrame() {
   if (!UpdateDeviceParams()) {
     return;
   }
-  int64_t timestamp = GetBootTimeNano() + kPredictionTimeWithoutVsyncNanos;
-  float position[3];
-  float orientation[4];
-  CardboardHeadTracker_getPose(head_tracker_, timestamp, kLandscapeLeft,
-                               position, orientation);
+  int64_t render_timestamp = GetBootTimeNano() + kPredictionTimeWithoutVsyncNanos;
+  float render_position[3];
+  float render_orientation[4];
+  CardboardHeadTracker_getPose(head_tracker_, render_timestamp, kLandscapeLeft,
+                               render_position, render_orientation);
 
-  const std::array<float, 3> head_position = {position[0], position[1],
-                                              position[2]};
-  const std::array<float, 4> head_orientation = {orientation[0], orientation[1],
-                                                 orientation[2], orientation[3]};
+  const std::array<float, 3> head_position = {render_position[0],
+                                              render_position[1],
+                                              render_position[2]};
+  std::array<float, 4> head_orientation = {render_orientation[0],
+                                           render_orientation[1],
+                                           render_orientation[2],
+                                           render_orientation[3]};
 
+  Quatf inv_recenter(0.f, 0.f, 0.f, 1.f);
+  if (has_recenter_offset_) {
+    const int64_t now_nanos = GetBootTimeNano();
+    if (!has_current_recenter_offset_) {
+      current_recenter_offset_ = {0.f, 0.f, 0.f, 1.f};
+      has_current_recenter_offset_ = true;
+    }
+
+    float alpha = 0.05f;
+    if (last_recenter_update_nanos_ != 0) {
+      const float dt_seconds =
+          static_cast<float>(now_nanos - last_recenter_update_nanos_) /
+          1000000000.0f;
+      constexpr float kRecenterTimeConstantSeconds = 1.0f;
+      alpha = 1.0f - std::exp(-dt_seconds / kRecenterTimeConstantSeconds);
+      if (alpha < 0.0f) {
+        alpha = 0.0f;
+      } else if (alpha > 1.0f) {
+        alpha = 1.0f;
+      }
+    }
+    last_recenter_update_nanos_ = now_nanos;
+
+    Quatf current_q(current_recenter_offset_[0], current_recenter_offset_[1],
+                    current_recenter_offset_[2], current_recenter_offset_[3]);
+    Quatf target_q(recenter_offset_[0], recenter_offset_[1],
+                   recenter_offset_[2], recenter_offset_[3]);
+    Quatf slerped = SlerpQuaternions(current_q, target_q, alpha);
+    current_recenter_offset_ = {slerped.x, slerped.y, slerped.z, slerped.w};
+    inv_recenter = Quatf(-slerped.x, -slerped.y, -slerped.z, slerped.w);
+
+    Quatf render_q(head_orientation[0], head_orientation[1], head_orientation[2],
+                   head_orientation[3]);
+    Quatf corrected_render = render_q * inv_recenter;
+    head_orientation = {corrected_render.x, corrected_render.y,
+                        corrected_render.z, corrected_render.w};
+  }
+
+  SetCurrentFramePose(head_orientation);
   RenderVideoToTexture(head_position, head_orientation);
+
+  int64_t display_timestamp = GetBootTimeNano() + kDisplayPosePredictionNanos;
+  float display_position[3];
+  float display_orientation[4];
+  CardboardHeadTracker_getPose(head_tracker_, display_timestamp, kLandscapeLeft,
+                               display_position, display_orientation);
+  std::array<float, 4> latest_orientation = {display_orientation[0],
+                                             display_orientation[1],
+                                             display_orientation[2],
+                                             display_orientation[3]};
+  if (has_recenter_offset_) {
+    Quatf latest_q(latest_orientation[0], latest_orientation[1],
+                   latest_orientation[2], latest_orientation[3]);
+    Quatf corrected_latest = latest_q * inv_recenter;
+    latest_orientation = {corrected_latest.x, corrected_latest.y,
+                          corrected_latest.z, corrected_latest.w};
+  }
+
+  float u_offset = 0.f;
+  float v_offset = 0.f;
+  if (has_render_pose_) {
+    CalculateUvOffset(last_rendered_orientation_, latest_orientation,
+                      u_offset, v_offset);
+  }
+
+  left_eye_texture_description_.left_u = 0.f + u_offset;
+  left_eye_texture_description_.right_u = 0.5f + u_offset;
+  left_eye_texture_description_.top_v = 1.f + v_offset;
+  left_eye_texture_description_.bottom_v = 0.f + v_offset;
+
+  right_eye_texture_description_.left_u = 0.5f + u_offset;
+  right_eye_texture_description_.right_u = 1.f + u_offset;
+  right_eye_texture_description_.top_v = 1.f + v_offset;
+  right_eye_texture_description_.bottom_v = 0.f + v_offset;
 
   CardboardDistortionRenderer_renderEyeToDisplay(
       distortion_renderer_, 0, 0, 0, screen_width_, screen_height_,
@@ -282,6 +367,7 @@ void VrMoonlightApp::OnPause() {
 void VrMoonlightApp::OnResume() {
   CardboardHeadTracker_resume(head_tracker_);
   device_params_changed_ = true;
+  last_recenter_update_nanos_ = 0;
 }
 
 void VrMoonlightApp::ResetRenderTarget() {
@@ -466,6 +552,30 @@ void VrMoonlightApp::DestroyCardboardResources() {
     CardboardLensDistortion_destroy(lens_distortion_);
     lens_distortion_ = nullptr;
   }
+}
+
+void VrMoonlightApp::SetCurrentFramePose(const std::array<float, 4>& orientation) {
+  last_rendered_orientation_ = orientation;
+  has_render_pose_ = true;
+}
+
+void VrMoonlightApp::RecenterView() {
+  if (head_tracker_ == nullptr) {
+    return;
+  }
+  int64_t timestamp = GetBootTimeNano() + kPredictionTimeWithoutVsyncNanos;
+  float position[3];
+  float orientation[4];
+  CardboardHeadTracker_getPose(head_tracker_, timestamp, kLandscapeLeft,
+                               position, orientation);
+  recenter_offset_ = {orientation[0], orientation[1], orientation[2],
+                      orientation[3]};
+  has_recenter_offset_ = true;
+  if (!has_current_recenter_offset_) {
+    current_recenter_offset_ = {0.f, 0.f, 0.f, 1.f};
+    has_current_recenter_offset_ = true;
+  }
+  last_recenter_update_nanos_ = 0;
 }
 
 void VrMoonlightApp::SetScreenDistance(float meters) {
