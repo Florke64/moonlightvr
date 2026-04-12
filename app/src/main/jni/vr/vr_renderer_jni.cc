@@ -158,3 +158,23 @@ extern "C" JNIEXPORT void JNICALL
 Java_com_limelight_vr_VrRenderer_nativeRecenterView(JNIEnv*, jobject, jlong handle) {
   FromHandle(handle)->RecenterView();
 }
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_limelight_vr_VrRenderer_nativeAdjustScreenPosition(JNIEnv*, jobject,
+                                                            jlong handle,
+                                                            jfloat deltaX,
+                                                            jfloat deltaY) {
+  FromHandle(handle)->AdjustScreenPosition(deltaX, deltaY);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_limelight_vr_VrRenderer_nativeAdjustScreenRotation(JNIEnv*, jobject,
+                                                            jlong handle,
+                                                            jfloat deltaRadians) {
+  FromHandle(handle)->AdjustScreenRotation(deltaRadians);
+}
+
+extern "C" JNIEXPORT jfloat JNICALL
+Java_com_limelight_vr_VrRenderer_nativeGetScreenSize(JNIEnv*, jobject, jlong handle) {
+  return FromHandle(handle)->GetScreenSize();
+}

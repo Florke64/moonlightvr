@@ -52,6 +52,11 @@
             android:title="@string/title_checkbox_enable_skybox"
             android:summary="@string/summary_checkbox_enable_skybox"
             android:defaultValue="true" />
+        <CheckBoxPreference
+            android:key="checkbox_quick_zoom"
+            android:title="@string/title_checkbox_quick_zoom"
+            android:summary="@string/summary_checkbox_quick_zoom"
+            android:defaultValue="false" />
         <com.limelight.preferences.SeekBarPreference
             android:key="seekbar_vr_screen_distance"
             android:dialogMessage="@string/summary_seekbar_vr_screen_distance"

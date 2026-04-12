@@ -717,6 +717,11 @@ void VrMoonlightApp::SetCurrentFramePose(const std::array<float, 4>& orientation
 }
 
 void VrMoonlightApp::RecenterView() {
+  screen_yaw_radians_ = 0.0f;
+  screen_pitch_radians_ = 0.0f;
+  screen_rotation_radians_ = 0.0f;
+  UpdateModelMatrix();
+
   if (head_tracker_ == nullptr) {
     return;
   }
@@ -749,8 +754,8 @@ void VrMoonlightApp::SetScreenSize(float sizeMultiplier) {
   screen_size_multiplier_ = sizeMultiplier;
   if (screen_size_multiplier_ < 0.25f) {
     screen_size_multiplier_ = 0.25f;
-  } else if (screen_size_multiplier_ > 2.0f) {
-    screen_size_multiplier_ = 2.0f;
+  } else if (screen_size_multiplier_ > 4.0f) {
+    screen_size_multiplier_ = 4.0f;
   }
   UpdateModelMatrix();
   geometry_dirty_ = true;
@@ -770,11 +775,29 @@ void VrMoonlightApp::AdjustScreenSize(float deltaMultiplier) {
   screen_size_multiplier_ += deltaMultiplier;
   if (screen_size_multiplier_ < 0.25f) {
     screen_size_multiplier_ = 0.25f;
-  } else if (screen_size_multiplier_ > 2.0f) {
-    screen_size_multiplier_ = 2.0f;
+  } else if (screen_size_multiplier_ > 4.0f) {
+    screen_size_multiplier_ = 4.0f;
   }
   UpdateModelMatrix();
   geometry_dirty_ = true;
+}
+
+void VrMoonlightApp::AdjustScreenPosition(float deltaX, float deltaY) {
+  const float kYawSensitivity = 3.0f;
+  const float kPitchSensitivity = 3.0f;
+
+  screen_yaw_radians_ += deltaX * kYawSensitivity;
+  screen_pitch_radians_ += deltaY * kPitchSensitivity;
+
+  screen_pitch_radians_ = std::clamp(screen_pitch_radians_, -1.047f, 1.047f);
+  screen_yaw_radians_ = std::clamp(screen_yaw_radians_, -3.14159f, 3.14159f);
+  UpdateModelMatrix();
+}
+
+void VrMoonlightApp::AdjustScreenRotation(float deltaRadians) {
+  screen_rotation_radians_ += deltaRadians;
+  screen_rotation_radians_ = std::clamp(screen_rotation_radians_, -1.5708f, 1.5708f);
+  UpdateModelMatrix();
 }
 
 void VrMoonlightApp::SetCurvatureMode(int mode) {
@@ -812,6 +835,10 @@ float VrMoonlightApp::GetVerticalCurvature() const {
   return vertical_curvature_percent_;
 }
 
+float VrMoonlightApp::GetScreenSize() const {
+  return screen_size_multiplier_;
+}
+
 void VrMoonlightApp::SetSkyboxEnabled(bool enabled) {
   skybox_enabled_ = enabled;
 }
@@ -825,7 +852,32 @@ void VrMoonlightApp::UpdateModelMatrix() {
   const float half_height = half_width / kScreenAspectRatio;
   const std::array<float, 3> scale = {half_width, -half_height, 1.0f};
   const std::array<float, 3> translation = {0.0f, 0.0f, -screen_distance_meters_};
-  model_matrix_ = GetTranslationMatrix(translation) * GetScaleMatrix(scale);
+
+  Matrix4x4 local_rot;
+  for (int i = 0; i < 16; ++i) local_rot.m[i/4][i%4] = (i%5 == 0) ? 1.0f : 0.0f;
+  float cos_r = std::cos(screen_rotation_radians_);
+  float sin_r = std::sin(screen_rotation_radians_);
+  local_rot.m[0][0] = cos_r;  local_rot.m[0][1] = -sin_r;
+  local_rot.m[1][0] = sin_r;  local_rot.m[1][1] = cos_r;
+
+  Matrix4x4 orbit_rot;
+  for (int i = 0; i < 16; ++i) orbit_rot.m[i/4][i%4] = (i%5 == 0) ? 1.0f : 0.0f;
+  float cos_y = std::cos(screen_yaw_radians_);
+  float sin_y = std::sin(screen_yaw_radians_);
+  float cos_x = std::cos(screen_pitch_radians_);
+  float sin_x = std::sin(screen_pitch_radians_);
+
+  orbit_rot.m[0][0] = cos_y;
+  orbit_rot.m[0][1] = sin_y * sin_x;
+  orbit_rot.m[0][2] = sin_y * cos_x;
+  orbit_rot.m[1][0] = 0.0f;
+  orbit_rot.m[1][1] = cos_x;
+  orbit_rot.m[1][2] = -sin_x;
+  orbit_rot.m[2][0] = -sin_y;
+  orbit_rot.m[2][1] = cos_y * sin_x;
+  orbit_rot.m[2][2] = cos_y * cos_x;
+
+  model_matrix_ = orbit_rot * GetTranslationMatrix(translation) * local_rot * GetScaleMatrix(scale);
 }
 
 void VrMoonlightApp::UpdateScreenGeometry() {

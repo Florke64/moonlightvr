@@ -31,6 +31,8 @@ class VrMoonlightApp {
   void SetScreenSize(float sizeMultiplier);
   void AdjustScreenDistance(float deltaMeters);
   void AdjustScreenSize(float deltaMultiplier);
+  void AdjustScreenPosition(float deltaX, float deltaY);
+  void AdjustScreenRotation(float deltaRadians);
   void SetCurvatureMode(int mode);
   void SetCurvatureAmount(float percent);
   void SetHorizontalCurvature(float percent);
@@ -40,6 +42,7 @@ class VrMoonlightApp {
   float GetCurvatureAmount() const;
   float GetHorizontalCurvature() const;
   float GetVerticalCurvature() const;
+  float GetScreenSize() const;
   void SetCurrentFramePose(const std::array<float, 4>& orientation);
   void RecenterView();
 
@@ -111,6 +114,9 @@ class VrMoonlightApp {
   bool has_current_recenter_offset_;
   int64_t last_recenter_update_nanos_;
   bool geometry_dirty_;
+  float screen_yaw_radians_ = 0.0f;
+  float screen_pitch_radians_ = 0.0f;
+  float screen_rotation_radians_ = 0.0f;
 };
 
 }  // namespace moonlight_vr

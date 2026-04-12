@@ -161,6 +161,14 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
         nativeAdjustScreenSize(nativeHandle, deltaMultiplier);
     }
 
+    public void adjustScreenPosition(float deltaX, float deltaY) {
+        nativeAdjustScreenPosition(nativeHandle, deltaX, deltaY);
+    }
+
+    public void adjustScreenRotation(float deltaRadians) {
+        nativeAdjustScreenRotation(nativeHandle, deltaRadians);
+    }
+
     public void recenterView() {
         nativeRecenterView(nativeHandle);
     }
@@ -288,6 +296,10 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
         return nativeGetVerticalCurvature(nativeHandle);
     }
 
+    public float getScreenSize() {
+        return nativeGetScreenSize(nativeHandle);
+    }
+
     private native long nativeCreate(Context context, AssetManager assetManager);
     private native void nativeDestroy(long handle);
     private native int nativeOnSurfaceCreated(long handle);
@@ -300,6 +312,8 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
     private native void nativeSetScreenSize(long handle, float sizeMultiplier);
     private native void nativeAdjustScreenDistance(long handle, float deltaMeters);
     private native void nativeAdjustScreenSize(long handle, float deltaMultiplier);
+    private native void nativeAdjustScreenPosition(long handle, float deltaX, float deltaY);
+    private native void nativeAdjustScreenRotation(long handle, float deltaRadians);
     private native void nativeRecenterView(long handle);
     private native void nativeSetCurvatureMode(long handle, int mode);
     private native void nativeSetCurvatureAmount(long handle, float percent);
@@ -310,4 +324,5 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
     private native float nativeGetCurvatureAmount(long handle);
     private native float nativeGetHorizontalCurvature(long handle);
     private native float nativeGetVerticalCurvature(long handle);
+    private native float nativeGetScreenSize(long handle);
 }

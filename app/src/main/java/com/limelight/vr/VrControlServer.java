@@ -2,6 +2,9 @@ package com.limelight.vr;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.os.Handler;
+import android.os.Looper;
+import android.preference.PreferenceManager;
 import android.util.Base64;
 
 import com.limelight.BuildConfig;
@@ -30,6 +33,9 @@ import java.security.cert.Certificate;
 import java.security.cert.X509Certificate;
 import java.util.Calendar;
 import java.util.Date;
+import java.util.Map;
+import java.util.Timer;
+import java.util.TimerTask;
 
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
@@ -41,9 +47,17 @@ public class VrControlServer extends NanoHTTPD {
     private static final String PREF_NAME = "VrControlPrefs";
     private static final String PREF_KEY_PASS = "keystore_pass";
     private static final String KEYSTORE_FILE = "vr_keystore.p12";
+    private static final int ZOOM_ANIMATION_DURATION_MS = 500;
 
     private final Context context;
     private VrRenderer vrRenderer;
+    private Timer quickZoomTimer;
+    private float preZoomSize = -1f;
+    private Handler animationHandler;
+    private Runnable zoomAnimator;
+    private float animStartSize;
+    private float animTargetSize;
+    private long animStartTime;
 
     public VrControlServer(Context context) throws Exception {
         super(DEFAULT_PORT);
@@ -140,6 +154,61 @@ public class VrControlServer extends NanoHTTPD {
                 return newFixedLengthResponse(Response.Status.OK, "application/json", "{\"status\":\"ok\"}");
             }
             return newFixedLengthResponse(Response.Status.SERVICE_UNAVAILABLE, "application/json", "{\"error\":\"no renderer\"}");
+        } else if (uri.equals("/gesture") && Method.POST.equals(session.getMethod())) {
+            try {
+                Map<String, String> files = new java.util.HashMap<>();
+                session.parseBody(files);
+                String jsonStr = files.get("postData");
+                if (jsonStr != null && vrRenderer != null) {
+                    org.json.JSONObject obj = new org.json.JSONObject(jsonStr);
+                    String type = obj.optString("type", "");
+
+                    boolean isQuickZoom = android.preference.PreferenceManager.getDefaultSharedPreferences(context)
+                            .getBoolean("checkbox_quick_zoom", false);
+
+                    if ("pan".equals(type)) {
+                        float dx = (float) obj.optDouble("dx", 0.0);
+                        float dy = (float) obj.optDouble("dy", 0.0);
+                        vrRenderer.adjustScreenPosition(dx, dy);
+                    } else if ("pinch".equals(type)) {
+                        float dScale = (float) obj.optDouble("dScale", 0.0);
+                        if (isQuickZoom && preZoomSize < 0) {
+                            preZoomSize = vrRenderer.getScreenSize();
+                        }
+                        vrRenderer.adjustScreenSize(dScale * -4.0f);
+                        if (isQuickZoom && preZoomSize > 0) {
+                            resetQuickZoomIdle();
+                        }
+                    } else if ("rotate".equals(type)) {
+                        float rotation = (float) obj.optDouble("rotation", 0.0);
+                        vrRenderer.adjustScreenRotation(rotation);
+                    } else if ("pinch_rotate".equals(type)) {
+                        float dScale = (float) obj.optDouble("dScale", 0.0);
+                        float rotation = (float) obj.optDouble("rotation", 0.0);
+                        if (isQuickZoom && preZoomSize < 0) {
+                            preZoomSize = vrRenderer.getScreenSize();
+                        }
+                        vrRenderer.adjustScreenSize(dScale * -4.0f);
+                        vrRenderer.adjustScreenRotation(rotation);
+                        if (isQuickZoom && preZoomSize > 0) {
+                            resetQuickZoomIdle();
+                        }
+                    } else if ("doubletap".equals(type)) {
+                        if (isQuickZoom && quickZoomTimer != null) {
+                            quickZoomTimer.cancel();
+                            quickZoomTimer.purge();
+                            preZoomSize = -1f;
+                        }
+                        resetToPreferenceSettings();
+                        vrRenderer.recenterView();
+                    }
+                }
+                return newFixedLengthResponse(Response.Status.OK, "application/json", "{\"status\":\"ok\"}");
+            } catch (Exception e) {
+                return newFixedLengthResponse(Response.Status.INTERNAL_ERROR, "application/json", "{\"error\":\"" + e.getMessage() + "\"}");
+            }
+        } else if (uri.equals("/buttons.html") || uri.equals("/buttons")) {
+            return serveButtonsHtml();
         } else if (uri.equals("/zoomin")) {
             if (vrRenderer != null) {
                 vrRenderer.adjustScreenDistance(-ZOOM_STEP);
@@ -224,22 +293,98 @@ public class VrControlServer extends NanoHTTPD {
 
     private Response serveHtml() {
         String html = "<!DOCTYPE html><html><head><meta charset=\"utf-8\">" +
+            "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no\">" +
+            "<title>VR Control Canvas</title>" +
+            "<style>" +
+            "body, html { margin: 0; padding: 0; width: 100%; height: 100%; background: #222; overflow: hidden; touch-action: none; color: #aa344a; font-family: sans-serif; user-select: none; -webkit-user-select: none; overscroll-behavior: none; }" +
+            "#canvas { width: 100%; height: 100%; display: block; }" +
+            "#hud { position: absolute; top: 20px; left: 20px; pointer-events: none; opacity: 0.8; font-size: 14px; }" +
+            "#menu { position: absolute; top: 20px; right: 20px; pointer-events: auto; }" +
+            "#menu a { color: #aa344a; text-decoration: none; font-size: 14px; }" +
+            "</style></head><body>" +
+            "<div id=\"hud\"><strong>MoonlightVR Canvas</strong><br>" +
+            "2 Fingers: Pinch to Zoom<br>2 Fingers: Rotate<br>Double Tap: Recenter</div>" +
+            "<div id=\"menu\"><a href=\"/buttons.html\">Buttons</a></div>" +
+            "<canvas id=\"canvas\"></canvas>" +
+            "<script>" +
+            "const cvs = document.getElementById('canvas');" +
+            "const ctx = cvs.getContext('2d');" +
+            "let width, height;" +
+            "function resize() { width = cvs.width = window.innerWidth; height = cvs.height = window.innerHeight; }" +
+            "window.addEventListener('resize', resize); resize();" +
+            "let touches = {}; let initDist = null; let initRot = null; let lastTap = 0; let lastSend = 0;" +
+
+            "function throttledSend(payload) {" +
+            "  let now = Date.now();" +
+            "  if (now - lastSend > 33) {" +
+            "    fetch('/gesture', { method: 'POST', body: JSON.stringify(payload) }).catch(e=>console.error(e));" +
+            "    lastSend = now;" +
+            "  }" +
+            "}" +
+
+            "cvs.addEventListener('touchstart', e => {" +
+            "  e.preventDefault();" +
+            "  for(let t of e.changedTouches) touches[t.identifier] = { x: t.clientX, y: t.clientY };" +
+            "  let vals = Object.values(touches);" +
+            "  if(vals.length === 2) {" +
+            "    let dx = vals[0].x - vals[1].x, dy = vals[0].y - vals[1].y;" +
+            "    initDist = Math.hypot(dx, dy); initRot = Math.atan2(dy, dx);" +
+            "  }" +
+            "  if(vals.length === 1) {" +
+            "    let now = Date.now();" +
+            "    if(now - lastTap < 300) { fetch('/gesture', { method: 'POST', body: JSON.stringify({type:'doubletap'}) }).catch(e=>{}); lastTap = 0; } else lastTap = now;" +
+            "  }" +
+            "});" +
+
+            "cvs.addEventListener('touchmove', e => {" +
+            "  e.preventDefault();" +
+            "  let active = e.touches;" +
+            "  if(active.length === 1) {" +
+            "    let t = active[0], old = touches[t.identifier];" +
+            "    touches[t.identifier] = { x: t.clientX, y: t.clientY };" +
+            "  } else if(active.length === 2) {" +
+            "    let t1 = active[0], t2 = active[1];" +
+            "    let dx = t1.clientX - t2.clientX, dy = t1.clientY - t2.clientY;" +
+            "    let dist = Math.hypot(dx, dy), rot = Math.atan2(dy, dx);" +
+            "    if(initDist !== null && initRot !== null) {" +
+            "      let dRot = rot - initRot;" +
+            "      if(dRot > Math.PI) dRot -= Math.PI*2; if(dRot < -Math.PI) dRot += Math.PI*2;" +
+            "      throttledSend({ type: 'pinch_rotate', dScale: (initDist - dist)*0.005, rotation: dRot });" +
+            "    }" +
+            "    initDist = dist; initRot = rot;" +
+            "    touches[t1.identifier] = { x: t1.clientX, y: t1.clientY };" +
+            "    touches[t2.identifier] = { x: t2.clientX, y: t2.clientY };" +
+            "  }" +
+            "  ctx.clearRect(0,0,width,height); ctx.fillStyle = 'rgba(170,52,74,0.4)';" +
+            "  for(let i=0; i<active.length; i++) { ctx.beginPath(); ctx.arc(active[i].clientX, active[i].clientY, 40, 0, Math.PI*2); ctx.fill(); }" +
+            "});" +
+
+            "cvs.addEventListener('touchend', e => {" +
+            "  e.preventDefault(); for(let t of e.changedTouches) delete touches[t.identifier];" +
+            "  if(Object.keys(touches).length < 2) { initDist = null; initRot = null; }" +
+            "  ctx.clearRect(0,0,width,height);" +
+            "});" +
+            "</script></body></html>";
+        return newFixedLengthResponse(Response.Status.OK, "text/html", html);
+    }
+
+    private Response serveButtonsHtml() {
+        String html = "<!DOCTYPE html><html><head><meta charset=\"utf-8\">" +
             "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">" +
             "<title>MoonlightVR Control</title>" +
             "<style>" +
-            "body{font-family:sans-serif;margin:0;padding:20px;background:#111;color:#eee}" +
-            "h1{color:#00d8ff}.card{background:#222;padding:20px;border-radius:8px;margin:10px 0}" +
-            ".intro{border-left:4px solid #00d8ff}" +
+            "body{font-family:sans-serif;margin:0;padding:20px;background:#222;color:#eee}" +
+            "h1{color:#aa344a}.card{background:#333;padding:20px;border-radius:8px;margin:10px 0}" +
+            ".intro{border-left:4px solid #aa344a}" +
             ".status{color:#4f4}.btn{display:block;width:100%;padding:15px;margin:5px 0;" +
-            "background:#00d8ff;border:none;border-radius:4px;color:#111;font-size:16px;font-weight:bold;cursor:pointer}" +
-            ".btn:active{background:#00b8e6}.row{display:flex;gap:10px}.row .btn{flex:1}" +
+            "background:#aa344a;border:none;border-radius:4px;color:#111;font-size:16px;font-weight:bold;cursor:pointer}" +
+            ".btn:active{background:#622a35}.row{display:flex;gap:10px}.row .btn{flex:1}" +
             "input[type=range]{width:100%;margin:15px 0}</style></head>" +
             "<body><h1>MoonlightVR</h1>" +
-            "<div class=\"card intro\"><h2>About MoonlightVR</h2>" +
-            "<p>MoonlightVR extends Moonlight Android with Google Cardboard rendering so your streamed game appears on a stable virtual screen in 3D space with head tracking.</p>" +
-            "<p>This integrated HTTPS control panel lets you fine-tune distance, size, and curvature in real time while you play.</p></div>" +
+            "<div class=\"card intro\">" +
             "<div class=\"card\"><h3>Version: " + VERSION + "</h3>" +
             "<p class=\"status\">HTTPS Server Running on port 8555</p></div>" +
+            "<div class=\"card\"><a href=\"/\" style=\"color:#aa344a;\">&larr; Back to Canvas</a></div>" +
             "<div class=\"card\"><h2>Screen Position</h2>" +
             "<div class=\"row\"><button class=\"btn\" onclick=\"fetch('/zoomin')\">Zoom In</button>" +
             "<button class=\"btn\" onclick=\"fetch('/zoomout')\">Zoom Out</button></div>" +
@@ -291,6 +436,72 @@ public class VrControlServer extends NanoHTTPD {
         if (uri.endsWith(".svg")) return "image/svg+xml";
         if (uri.endsWith(".json")) return "application/json";
         return "text/plain";
+    }
+
+    private void resetQuickZoomIdle() {
+        if (quickZoomTimer != null) {
+            quickZoomTimer.cancel();
+            quickZoomTimer.purge();
+        }
+        quickZoomTimer = new Timer();
+        quickZoomTimer.schedule(new TimerTask() {
+            @Override
+            public void run() {
+                if (preZoomSize > 0 && vrRenderer != null) {
+                    float currentSize = vrRenderer.getScreenSize();
+                    if (Math.abs(currentSize - preZoomSize) > 0.01f) {
+                        animateZoomTo(preZoomSize);
+                    }
+                    preZoomSize = -1f;
+                }
+            }
+        }, 5000);
+    }
+
+    private void animateZoomTo(final float targetSize) {
+        if (vrRenderer == null) return;
+
+        if (animationHandler == null) {
+            animationHandler = new Handler(Looper.getMainLooper());
+        }
+        if (zoomAnimator != null) {
+            animationHandler.removeCallbacks(zoomAnimator);
+        }
+
+        final float startSize = vrRenderer.getScreenSize();
+        animStartSize = startSize;
+        animTargetSize = targetSize;
+        animStartTime = System.currentTimeMillis();
+
+        zoomAnimator = new Runnable() {
+            @Override
+            public void run() {
+                long elapsed = System.currentTimeMillis() - animStartTime;
+                float t = Math.min(1.0f, (float) elapsed / ZOOM_ANIMATION_DURATION_MS);
+                t = t * t * (3f - 2f * t);
+
+                float newSize = animStartSize + (animTargetSize - animStartSize) * t;
+                vrRenderer.setScreenSize(newSize);
+
+                if (elapsed < ZOOM_ANIMATION_DURATION_MS) {
+                    animationHandler.postDelayed(this, 16);
+                }
+            }
+        };
+        animationHandler.post(zoomAnimator);
+    }
+
+    private void resetToPreferenceSettings() {
+        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
+        
+        int vrDistanceRaw = prefs.getInt("seekbar_vr_screen_distance", 20);
+        float vrDistance = vrDistanceRaw / 10f;
+        
+        int vrSizeRaw = prefs.getInt("seekbar_vr_screen_size", 50);
+        float vrSize = vrSizeRaw / 50f;
+        
+        vrRenderer.setScreenDistance(vrDistance);
+        vrRenderer.setScreenSize(vrSize);
     }
 
     public int getPort() {
