@@ -154,6 +154,8 @@ public class VrControlServer extends NanoHTTPD {
                 return newFixedLengthResponse(Response.Status.OK, "application/json", "{\"status\":\"ok\"}");
             }
             return newFixedLengthResponse(Response.Status.SERVICE_UNAVAILABLE, "application/json", "{\"error\":\"no renderer\"}");
+        } else if (uri.equals("/ping")) {
+            return newFixedLengthResponse(Response.Status.OK, "application/json", "{\"status\":\"pong\",\"ts\":" + System.currentTimeMillis() + "}");
         } else if (uri.equals("/gesture") && Method.POST.equals(session.getMethod())) {
             try {
                 Map<String, String> files = new java.util.HashMap<>();
@@ -294,17 +296,19 @@ public class VrControlServer extends NanoHTTPD {
     private Response serveHtml() {
         String html = "<!DOCTYPE html><html><head><meta charset=\"utf-8\">" +
             "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no\">" +
-            "<title>VR Control Canvas</title>" +
+            "<title>VR Control</title>" +
             "<style>" +
             "body, html { margin: 0; padding: 0; width: 100%; height: 100%; background: #222; overflow: hidden; touch-action: none; color: #aa344a; font-family: sans-serif; user-select: none; -webkit-user-select: none; overscroll-behavior: none; }" +
             "#canvas { width: 100%; height: 100%; display: block; }" +
             "#hud { position: absolute; top: 20px; left: 20px; pointer-events: none; opacity: 0.8; font-size: 14px; }" +
             "#menu { position: absolute; top: 20px; right: 20px; pointer-events: auto; }" +
             "#menu a { color: #aa344a; text-decoration: none; font-size: 14px; }" +
+            "#status { position: absolute; bottom: 20px; right: 20px; width: 16px; height: 16px; border-radius: 50%; background: #f44; box-shadow: 0 0 8px #f44; }" +
             "</style></head><body>" +
-            "<div id=\"hud\"><strong>MoonlightVR Canvas</strong><br>" +
+            "<div id=\"hud\"><strong>MoonlightVR Gestures</strong><br>" +
             "2 Fingers: Pinch to Zoom<br>2 Fingers: Rotate<br>Double Tap: Recenter</div>" +
             "<div id=\"menu\"><a href=\"/buttons.html\">Buttons</a></div>" +
+            "<div id=\"status\"></div>" +
             "<canvas id=\"canvas\"></canvas>" +
             "<script>" +
             "const cvs = document.getElementById('canvas');" +
@@ -364,6 +368,41 @@ public class VrControlServer extends NanoHTTPD {
             "  if(Object.keys(touches).length < 2) { initDist = null; initRot = null; }" +
             "  ctx.clearRect(0,0,width,height);" +
             "});" +
+
+            "let lastGesture = 0;" +
+            "const statusEl = document.getElementById('status');" +
+            "const markHealthy = () => { lastGesture = Date.now(); statusEl.style.background = '#4f4'; statusEl.style.boxShadow = '0 0 8px #4f4'; };" +
+            "cvs.addEventListener('touchstart', () => markHealthy());" +
+            "cvs.addEventListener('touchmove', () => markHealthy());" +
+            "setInterval(() => {" +
+            "  if (Date.now() - lastGesture > 1000) {" +
+            "    fetch('/ping').then(r => {" +
+            "      statusEl.style.background = '#4f4'; statusEl.style.boxShadow = '0 0 8px #4f4';" +
+            "      if (wakeLock === null) requestWakeLock();" +
+            "    }).catch(() => {" +
+            "      statusEl.style.background = '#f44'; statusEl.style.boxShadow = '0 0 8px #f44';" +
+            "      if (wakeLock !== null) { wakeLock.release(); wakeLock = null; }" +
+            "    });" +
+            "  } else { lastGesture = 0; }" +
+            "}, 1000);" +
+
+            "let wakeLock = null;" +
+            "const releaseWakeLock = () => { if (wakeLock !== null) { wakeLock.release(); wakeLock = null; console.log('Wake Lock released - no activity'); } };" +
+            "const requestWakeLock = async () => {" +
+            "  if ('wakeLock' in navigator && wakeLock === null) {" +
+            "    try {" +
+            "      wakeLock = await navigator.wakeLock.request('screen');" +
+            "      wakeLock.addEventListener('release', () => { console.log('Wake Lock released'); });" +
+            "    } catch (err) { console.error('Wake Lock:', err.message); }" +
+            "  }" +
+            "};" +
+            "requestWakeLock();" +
+            "document.addEventListener('visibilitychange', async () => {" +
+            "  if (document.visibilityState === 'visible') requestWakeLock();" +
+            "});" +
+            "setInterval(() => {" +
+            "  if (Date.now() - lastGesture > 30000) releaseWakeLock();" +
+            "}, 5000);" +
             "</script></body></html>";
         return newFixedLengthResponse(Response.Status.OK, "text/html", html);
     }
