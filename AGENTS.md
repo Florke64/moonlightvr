@@ -7,7 +7,13 @@ This fork of the Moonlight Android client (**MoonlightVR**) adds native support 
 - **Base project:** The original `moonlight-android` client with its multi-activity flow, StreamView/SurfaceHolder rendering, decoder pipeline, and JNI bridge (including `moonlight-core`).
 - **Extended VR path:** A dedicated `GLSurfaceView` (`app/src/main/java/com/limelight/vr/VrRenderer.java`) that drives a Cardboard-powered native renderer (`app/src/main/jni/vr/`), handles lifecycle callbacks, and surfaces a `Surface` for the decoder. 
 - **Head Tracking & Rendering:** Native head tracking computes per-eye View and Projection matrices using the Cardboard SDK. These are combined into an MVP matrix passed to the shader to keep the virtual screen stationary in 3D space. The model matrix explicitly flips the Y-axis scale to correct upside-down texture orientation.
-- **VR Preferences:** `PreferenceConfiguration` exposes `checkbox_enable_vr` (to toggle VR mode) and a slider for "VR screen distance" (1.0–4.0m). `Game` reads these preferences, initializing the VR surface when enabled and passing the user's distance preference down to the native renderer.
+- **VR Preferences:** `PreferenceConfiguration` exposes:
+  - `checkbox_enable_vr` - Toggle VR mode
+  - `seekbar_vr_screen_distance` - Screen distance (1.0–4.0m)
+  - `seekbar_vr_screen_size` - Screen size multiplier (0.25x–2.0x, up to 4.0x with quick zoom)
+  - `checkbox_quick_zoom` - Enable magnifying glass mode with auto-revert
+  - Curvature settings (mode, amount, horizontal/vertical)
+  - `checkbox_enable_skybox` - Toggle skybox background
 - **Native build:** Custom NDK module `vr_renderer` compiles Cardboard SDK sources (via `vendor/cardboard`) alongside the existing `moonlight-core` libs, linking against `libc++_shared` and `atomic`.
 
 ## Project Structure Notes
@@ -79,7 +85,7 @@ This fork of the Moonlight Android client (**MoonlightVR**) adds native support 
 
 ## Hotspots for Minor/Intermediate Rendering Changes
 - **Geometry adjustments:** `UpdateScreenGeometry()` (native) rebuilds curved mesh verts/texcoords when curvature settings change; change grid density or curvature math here.
-- **Transforms:** `UpdateModelMatrix()` controls screen distance and Y-axis flip; edit for alternate screen orientation or distance scaling.
+- **Transforms:** `UpdateModelMatrix()` controls screen distance, size, position (yaw/pitch orbit), and Z-axis rotation; edit for alternate screen orientation or distance scaling.
 - **Per-eye math:** `RenderVideoToTexture()` orchestrates per-eye view/projection matrices, draws the screen/skybox FBO pass, and manages depth state.
 - **Shaders:** `kVideo*`, `kLine*`, and `kSkybox*` shader strings near the top of `vr_renderer.cpp`; adjust these strings and the associated attribute/uniform lookups when changing shading behavior.
 - **Lifecycle/resource safety:** `VrRenderer` handles texture creation/release, context loss, and `surfaceListener` callbacks; extend it if you need to reinitialize additional GL resources during a context reset or add a custom `Skybox` loader.
@@ -104,3 +110,18 @@ The app includes an embedded HTTPS server for VR control panel access from LAN d
 - **Files:**
   - `app/src/main/java/com/limelight/vr/VrControlServer.java` - HTTP server implementation that builds the runtime keystore and serves the control page.
   - `app/src/main/java/com/limelight/vr/VrControlService.java` - Foreground service managing the NanoHTTPD lifecycle.
+
+## VR WebUI Canvas Interface
+The integrated web UI provides a touch-based canvas for VR scene control.
+
+### Touch Gestures
+- **Two-finger pinch:** Zoom in/out (adjusts screen size)
+- **Two-finger rotate:** Rotate screen around Z-axis
+- **Double-tap:** Recenter view and reset to preference settings
+
+### Endpoints
+- `GET /` - Canvas UI
+- `GET /buttons.html` - Button-based controls (legacy fallback)
+- `GET /recenter` - Recenter view
+- `POST /gesture` - Handle gesture JSON (`{"type":"pinch"|"rotate"|"pinch_rotate"|"pan"|"doubletap", ...}`)
+- `GET /ping` - Health check, returns `{"status":"pong","ts":<timestamp>}`
