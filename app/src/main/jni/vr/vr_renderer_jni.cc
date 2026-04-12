@@ -102,11 +102,25 @@ Java_com_limelight_vr_VrRenderer_nativeSetHorizontalCurvature(JNIEnv*, jobject,
 
 extern "C" JNIEXPORT void JNICALL
 Java_com_limelight_vr_VrRenderer_nativeSetVerticalCurvature(JNIEnv*, jobject,
-                                                          jlong handle,
-                                                          jfloat percent) {
+                                                           jlong handle,
+                                                           jfloat percent) {
   FromHandle(handle)->SetVerticalCurvature(percent);
 }
+ 
+extern "C" JNIEXPORT void JNICALL
+Java_com_limelight_vr_VrRenderer_nativeSetSkyboxEnabled(JNIEnv*, jobject,
+                                                        jlong handle,
+                                                        jboolean enabled) {
+  FromHandle(handle)->SetSkyboxEnabled(enabled);
+}
 
+extern "C" JNIEXPORT void JNICALL
+Java_com_limelight_vr_VrRenderer_nativeSetSkyboxTexture(JNIEnv*, jobject,
+                                                         jlong handle,
+                                                         jint textureId) {
+  FromHandle(handle)->SetSkyboxTexture(textureId);
+}
+ 
 extern "C" JNIEXPORT jfloat JNICALL
 Java_com_limelight_vr_VrRenderer_nativeGetCurvatureAmount(JNIEnv*, jobject,
                                                         jlong handle) {

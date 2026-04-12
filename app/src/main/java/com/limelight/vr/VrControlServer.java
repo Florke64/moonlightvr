@@ -229,11 +229,15 @@ public class VrControlServer extends NanoHTTPD {
             "<style>" +
             "body{font-family:sans-serif;margin:0;padding:20px;background:#111;color:#eee}" +
             "h1{color:#00d8ff}.card{background:#222;padding:20px;border-radius:8px;margin:10px 0}" +
+            ".intro{border-left:4px solid #00d8ff}" +
             ".status{color:#4f4}.btn{display:block;width:100%;padding:15px;margin:5px 0;" +
             "background:#00d8ff;border:none;border-radius:4px;color:#111;font-size:16px;font-weight:bold;cursor:pointer}" +
             ".btn:active{background:#00b8e6}.row{display:flex;gap:10px}.row .btn{flex:1}" +
             "input[type=range]{width:100%;margin:15px 0}</style></head>" +
             "<body><h1>MoonlightVR</h1>" +
+            "<div class=\"card intro\"><h2>About MoonlightVR</h2>" +
+            "<p>MoonlightVR extends Moonlight Android with Google Cardboard rendering so your streamed game appears on a stable virtual screen in 3D space with head tracking.</p>" +
+            "<p>This integrated HTTPS control panel lets you fine-tune distance, size, and curvature in real time while you play.</p></div>" +
             "<div class=\"card\"><h3>Version: " + VERSION + "</h3>" +
             "<p class=\"status\">HTTPS Server Running on port 8555</p></div>" +
             "<div class=\"card\"><h2>Screen Position</h2>" +

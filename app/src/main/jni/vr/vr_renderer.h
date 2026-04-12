@@ -35,6 +35,8 @@ class VrMoonlightApp {
   void SetCurvatureAmount(float percent);
   void SetHorizontalCurvature(float percent);
   void SetVerticalCurvature(float percent);
+  void SetSkyboxEnabled(bool enabled);
+  void SetSkyboxTexture(GLuint textureId);
   float GetCurvatureAmount() const;
   float GetHorizontalCurvature() const;
   float GetVerticalCurvature() const;
@@ -81,6 +83,11 @@ class VrMoonlightApp {
   GLint mvp_uniform_;
   GLint line_pos_attrib_;
   GLint line_mvp_uniform_;
+  GLuint skybox_program_;
+  GLint skybox_pos_attrib_;
+  GLint skybox_vp_uniform_;
+  GLint skybox_sampler_uniform_;
+  GLuint skybox_texture_;
 
   float texture_transform_[16];
   Matrix4x4 model_matrix_;
@@ -97,6 +104,7 @@ class VrMoonlightApp {
   int curved_vertices_per_strip_;
   std::array<float, 4> last_rendered_orientation_;
   bool has_render_pose_;
+  bool skybox_enabled_ = true;
   std::array<float, 4> recenter_offset_;
   bool has_recenter_offset_;
   std::array<float, 4> current_recenter_offset_;

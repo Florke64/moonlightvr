@@ -227,6 +227,8 @@
     <string name="summary_checkbox_enable_pip">Allows the stream to be viewed (but not controlled) while multitasking</string>
     <string name="title_checkbox_enable_vr">Enable VR mode</string>
     <string name="summary_checkbox_enable_vr">Use with the Cardboard VR set</string>
+    <string name="title_checkbox_enable_skybox">Enable VR Skybox</string>
+    <string name="summary_checkbox_enable_skybox">Render a world-locked skybox background in VR mode</string>
     <string name="title_seekbar_vr_screen_distance">VR screen distance</string>
     <string name="summary_seekbar_vr_screen_distance">Move the virtual screen closer or farther from your eyes.</string>
     <string name="suffix_seekbar_vr_distance">m</string>

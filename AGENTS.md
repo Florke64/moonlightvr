@@ -45,6 +45,51 @@ This fork of the Moonlight Android client (**MoonlightVR**) adds native support 
 - Keep the Cardboard submodule intact—avoid committing IDE/config artifacts, and run `git submodule update --init --recursive` if dependencies appear missing.
 - Any UI strings, preferences, or Android lifecycle tweaks should be done in the `app/src/main` layer so the experience stays cohesive for both VR and non-VR users.
 
+## VR Render Pipeline (Execution Order)
+1. `Game.onCreate()` reads `PreferenceConfiguration`, toggles `vrMode`, and instantiates `VrRenderer` when VR is enabled.
+2. `VrRenderer` calls `nativeCreate()`/`nativeOnSurfaceCreated()` to allocate `VrMoonlightApp`, create an external OES texture, and feed a `SurfaceTexture`/`Surface` back through `VrRenderer.SurfaceListener`.
+3. `Game.handleVrSurfaceReady()` binds that `Surface` to `MediaCodecDecoderRenderer`, so the decoder writes directly into the OES texture managed by VR.
+4. Each decoder frame triggers `VrRenderer.onFrameAvailable()`, which requests render, then `onDrawFrame()` updates the `SurfaceTexture`, sends the texture transform via `nativeSetTextureTransform()`, and calls `nativeOnDrawFrame()`.
+5. `VrMoonlightApp::OnDrawFrame()` updates Cardboard device params/head pose, renders the video into an offscreen FBO per eye, optionally draws the skybox cubemap, and then hands the FBO texture to `CardboardDistortionRenderer_renderEyeToDisplay()`.
+6. `CardboardDistortionRenderer` composites the per-eye viewports, applies lens distortion, writes to the screen, and finally `glDisable(GL_DEPTH_TEST)` plus any debug overlays exit (`kLineVertices`).
+
+## Call Graph: Java -> JNI -> Native -> Cardboard
+- `Game` (`app/src/main/java/com/limelight/Game.java`) configures VR settings and starts `VrRenderer` + `UiService`.
+- `VrRenderer` (`app/src/main/java/com/limelight/vr/VrRenderer.java`) implements `GLSurfaceView.Renderer`, handles lifecycle, exposes `setScreenDistance`, `setCurvature*`, `setSkyboxEnabled`, and uploads cubemap textures before calling native methods (`nativeCreate`, `nativeOnDrawFrame`, `nativeSetSkyboxTexture`, etc.).
+- JNI bridge (`app/src/main/jni/vr/vr_renderer_jni.cc`) forwards every GL/VR call to `VrMoonlightApp` (create, destroy, surface events, transforms, preference setters, skybox toggles), and exposes `nativeOnDrawFrame()` for each frame.
+- Native renderer (`app/src/main/jni/vr/vr_renderer.cpp/.h`) allocates Cardboard helpers, compiles shaders, builds meshes, updates model matrices, and orchestrates `RenderVideoToTexture()` plus skybox drawing.
+- Cardboard SDK sources under `vendor/cardboard/` supply:
+  * `CardboardHeadTracker` (pose prediction),
+  * `CardboardLensDistortion` (per-eye projection/eye-from-head matrices),
+  * `CardboardDistortionRenderer` (final distortion/compositing),
+  * `rendering/opengl_es2_distortion_renderer.cc` (GL draw helper shared in `VrMoonlightApp`).
+
+## Per-Frame Data Flow
+1. Decoder writes decoded video frames to the `Surface` provided by `VrRenderer`.
+2. `SurfaceTexture` attached to the OES texture is updated inside `VrRenderer.onFrameAvailable()`/`onDrawFrame()`.
+3. The OES texture is sampled inside `RenderVideoToTexture()` via `video_program_` when rendering into the FBO (`render_texture_`).
+4. The FBO stores both color (`render_texture_`) and depth (`depth_renderbuffer_`) attachments; the screen mesh is drawn twice (per eye) into different viewports and captured texture coordinates.
+5. After both eyes are rendered (including the optional skybox pass), `CardboardDistortionRenderer_renderEyeToDisplay()` takes the FBO texture, applies lens distortion meshes, and writes the final stereo output to the back buffer.
+
+## Skybox Integration Notes
+- **Cubemap upload path:** `VrRenderer.loadSkyboxCubemap()` loads six `panorama_<0-5>` resources (or HDR variants) and uploads them to GL cubemap faces; after successful upload it calls `nativeSetSkyboxTexture()` to hand the texture ID to native code.
+- **Face mapping convention:** `panoramaToFaceMap = {1,3,4,5,0,2}` maps [front/right/up/down/back/left] -> OpenGL targets `GL_TEXTURE_CUBE_MAP_{+X,-X,+Y,-Y,+Z,-Z}` to match Minecraft's strip layout.
+- **Rendering order + depth:** Skybox renders immediately after the video mesh in `RenderVideoToTexture()`, with `glDepthFunc(GL_LEQUAL)` and `glDepthMask(GL_FALSE)` so the skybox always passes depth but never writes depth, ensuring it stays behind the screen regardless of depth clears.
+- **Common failure modes:** cubemap upload failures (e.g., GL errors on face upload), invalid texture IDs passed to native, shader compile/link failures, Surface context recreation without reuploading the cubemap. Logging (via `LimeLog.warning`) flags these conditions.
+
+## Hotspots for Minor/Intermediate Rendering Changes
+- **Geometry adjustments:** `UpdateScreenGeometry()` (native) rebuilds curved mesh verts/texcoords when curvature settings change; change grid density or curvature math here.
+- **Transforms:** `UpdateModelMatrix()` controls screen distance and Y-axis flip; edit for alternate screen orientation or distance scaling.
+- **Per-eye math:** `RenderVideoToTexture()` orchestrates per-eye view/projection matrices, draws the screen/skybox FBO pass, and manages depth state.
+- **Shaders:** `kVideo*`, `kLine*`, and `kSkybox*` shader strings near the top of `vr_renderer.cpp`; adjust these strings and the associated attribute/uniform lookups when changing shading behavior.
+- **Lifecycle/resource safety:** `VrRenderer` handles texture creation/release, context loss, and `surfaceListener` callbacks; extend it if you need to reinitialize additional GL resources during a context reset or add a custom `Skybox` loader.
+
+## Debug Checklist
+- **GL shader compile/link logs:** `LoadGLShader()` logs shader compile failures; `VrMoonlightApp::OnSurfaceCreated()` now checks program link status and logs info logs.
+- **Texture ID health:** `loadSkyboxCubemap()` verifies `glGenTextures()` returns non-zero before proceeding, deletes textures when uploads fail, and sets `skyboxTextureId` to zero on cleanup.
+- **Surface validity:** `MediaCodecDecoderRenderer.configureAndStartDecoder()` reports severe logs if `Surface` is `null` or `!isValid()`; `Game.handleVrSurfaceReady()` avoids starting a connection until a valid surface arrives.
+- **Context recreation behavior:** `VrRenderer.onSurfaceCreated()` reuploads the saved cubemap (if present) to ensure skybox textures survive context loss; add similar reloads if you later add new GL assets.
+
 ## Integrated HTTPS Server
 The app includes an embedded HTTPS server for VR control panel access from LAN devices.
 

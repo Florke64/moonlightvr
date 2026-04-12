@@ -255,9 +255,27 @@ vrMode = getIntent().getBooleanExtra(EXTRA_ENABLE_VR, false) ||
                 vrRenderer.setCurvatureAmount(prefConfig.vrCurvatureAmountPercent);
                 vrRenderer.setHorizontalCurvature(prefConfig.vrHorizontalCurvaturePercent);
                 vrRenderer.setVerticalCurvature(prefConfig.vrVerticalCurvaturePercent);
+                vrRenderer.setSkyboxEnabled(prefConfig.enableSkybox);
                 vrSurfaceView.setEGLContextClientVersion(2);
                 vrSurfaceView.setRenderer(vrRenderer);
                 vrSurfaceView.setRenderMode(GLSurfaceView.RENDERMODE_CONTINUOUSLY);
+
+                if (prefConfig.enableSkybox) {
+                    final int[] panoramaResources = new int[] {
+                        R.drawable.panorama_0,
+                        R.drawable.panorama_1,
+                        R.drawable.panorama_2,
+                        R.drawable.panorama_3,
+                        R.drawable.panorama_4,
+                        R.drawable.panorama_5
+                    };
+                    vrSurfaceView.queueEvent(new Runnable() {
+                        @Override
+                        public void run() {
+                            vrRenderer.loadSkyboxCubemap(getResources(), panoramaResources);
+                        }
+                    });
+                }
 
                 startVrControlService(vrRenderer);
             }

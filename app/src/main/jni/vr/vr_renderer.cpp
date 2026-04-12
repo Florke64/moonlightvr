@@ -9,6 +9,7 @@
 #include <array>
 #include <cmath>
 #include <iterator>
+#include <string>
 #include <GLES2/gl2.h>
 #include <GLES2/gl2ext.h>
 #include <android/log.h>
@@ -92,6 +93,40 @@ const GLfloat kLineVertices[] = {
     0.f,  1.f, 0.f,
 };
 
+const char kSkyboxVertexShader[] =
+    "attribute vec4 a_Position;"           "\n"
+    "uniform mat4 u_VP;"                  "\n"
+    "varying vec3 v_TexCoord;"             "\n"
+    "void main() {"                        "\n"
+    "  v_TexCoord = a_Position.xyz;"       "\n"
+    "  vec4 pos = u_VP * vec4(a_Position.xyz, 1.0);" "\n"
+    "  gl_Position = pos.xyww;"           "\n"
+    "}";
+
+const char kSkyboxFragmentShader[] =
+    "precision mediump float;"                               "\n"
+    "varying vec3 v_TexCoord;"                               "\n"
+    "uniform samplerCube u_SkyboxTexture;"                   "\n"
+    "void main() {"                                          "\n"
+    "  vec3 dir = normalize(v_TexCoord);"                    "\n"
+    "  gl_FragColor = textureCube(u_SkyboxTexture, dir);"    "\n"
+    "}";
+
+const GLfloat kSkyboxVertices[] = {
+    -1.0f,  1.0f, -1.0f,  -1.0f, -1.0f, -1.0f,   1.0f, -1.0f, -1.0f,
+     1.0f, -1.0f, -1.0f,   1.0f,  1.0f, -1.0f,  -1.0f,  1.0f, -1.0f,
+    -1.0f, -1.0f,  1.0f,  -1.0f, -1.0f, -1.0f,  -1.0f,  1.0f, -1.0f,
+    -1.0f,  1.0f, -1.0f,  -1.0f,  1.0f,  1.0f,  -1.0f, -1.0f,  1.0f,
+     1.0f, -1.0f, -1.0f,   1.0f, -1.0f,  1.0f,   1.0f,  1.0f,  1.0f,
+     1.0f,  1.0f,  1.0f,   1.0f,  1.0f, -1.0f,   1.0f, -1.0f, -1.0f,
+    -1.0f, -1.0f,  1.0f,  -1.0f,  1.0f,  1.0f,   1.0f,  1.0f,  1.0f,
+     1.0f,  1.0f,  1.0f,   1.0f, -1.0f,  1.0f,  -1.0f, -1.0f,  1.0f,
+    -1.0f,  1.0f, -1.0f,   1.0f,  1.0f, -1.0f,   1.0f,  1.0f,  1.0f,
+     1.0f,  1.0f,  1.0f,  -1.0f,  1.0f,  1.0f,  -1.0f,  1.0f, -1.0f,
+    -1.0f, -1.0f, -1.0f,  -1.0f, -1.0f,  1.0f,   1.0f, -1.0f, -1.0f,
+     1.0f, -1.0f, -1.0f,  -1.0f, -1.0f,  1.0f,   1.0f, -1.0f,  1.0f
+};
+
 }  // namespace
 
 VrMoonlightApp::VrMoonlightApp(JavaVM* vm, jobject activity, jobject asset_manager)
@@ -114,12 +149,17 @@ VrMoonlightApp::VrMoonlightApp(JavaVM* vm, jobject activity, jobject asset_manag
       depth_renderbuffer_(0),
       position_attrib_(-1),
       texcoord_attrib_(-1),
-      texture_transform_uniform_(-1),
-      sampler_uniform_(-1),
-      mvp_uniform_(-1),
-      line_pos_attrib_(-1),
-      line_mvp_uniform_(-1),
-      model_matrix_(),
+       texture_transform_uniform_(-1),
+       sampler_uniform_(-1),
+       mvp_uniform_(-1),
+       line_pos_attrib_(-1),
+       line_mvp_uniform_(-1),
+       skybox_program_(0),
+       skybox_pos_attrib_(-1),
+       skybox_vp_uniform_(-1),
+       skybox_sampler_uniform_(-1),
+       skybox_texture_(0),
+       model_matrix_(),
       screen_distance_meters_(kDefaultScreenDistanceMeters),
       screen_size_multiplier_(1.0f),
       curvature_mode_(VrMoonlightApp::kCurvatureModeFlat),
@@ -182,6 +222,9 @@ VrMoonlightApp::~VrMoonlightApp() {
   if (line_program_) {
     glDeleteProgram(line_program_);
   }
+  if (skybox_program_) {
+    glDeleteProgram(skybox_program_);
+  }
   if (framebuffer_) {
     glDeleteFramebuffers(1, &framebuffer_);
   }
@@ -231,6 +274,38 @@ jint VrMoonlightApp::OnSurfaceCreated(JNIEnv* env) {
     glDeleteShader(line_fs);
     line_pos_attrib_ = glGetAttribLocation(line_program_, "a_Position");
     line_mvp_uniform_ = glGetUniformLocation(line_program_, "u_MVP");
+  }
+
+  if (skybox_program_ == 0) {
+    GLuint skybox_vs = LoadGLShader(GL_VERTEX_SHADER, kSkyboxVertexShader);
+    GLuint skybox_fs = LoadGLShader(GL_FRAGMENT_SHADER, kSkyboxFragmentShader);
+    if (skybox_vs != 0 && skybox_fs != 0) {
+      skybox_program_ = glCreateProgram();
+      glAttachShader(skybox_program_, skybox_vs);
+      glAttachShader(skybox_program_, skybox_fs);
+      glLinkProgram(skybox_program_);
+      GLint linked = GL_FALSE;
+      glGetProgramiv(skybox_program_, GL_LINK_STATUS, &linked);
+      if (linked == GL_FALSE) {
+        GLint length = 0;
+        glGetProgramiv(skybox_program_, GL_INFO_LOG_LENGTH, &length);
+        if (length > 0) {
+          std::string info(length, '\0');
+          glGetProgramInfoLog(skybox_program_, length, nullptr, info.data());
+          VR_LOGE("Skybox program link failed: %s", info.c_str());
+        }
+        glDeleteProgram(skybox_program_);
+        skybox_program_ = 0;
+      }
+      glDeleteShader(skybox_vs);
+      glDeleteShader(skybox_fs);
+    }
+
+    if (skybox_program_ != 0) {
+      skybox_pos_attrib_ = glGetAttribLocation(skybox_program_, "a_Position");
+      skybox_vp_uniform_ = glGetUniformLocation(skybox_program_, "u_VP");
+      skybox_sampler_uniform_ = glGetUniformLocation(skybox_program_, "u_SkyboxTexture");
+    }
   }
 
   if (video_texture_ == 0) {
@@ -564,7 +639,6 @@ void VrMoonlightApp::RenderVideoToTexture(
     std::array<float, 16> mvp_gl = mvp.ToGlArray();
 
     glViewport(viewport_x[eye_index], 0, viewport_width[eye_index], screen_height_);
-    glClear(GL_DEPTH_BUFFER_BIT);
     glUniformMatrix4fv(mvp_uniform_, 1, GL_FALSE, mvp_gl.data());
     if (use_curved_geometry) {
       for (int row = 0; row < curved_rows_; ++row) {
@@ -580,6 +654,48 @@ void VrMoonlightApp::RenderVideoToTexture(
   glDisableVertexAttribArray(position_attrib_);
   glDisableVertexAttribArray(texcoord_attrib_);
   glBindTexture(GL_TEXTURE_EXTERNAL_OES, 0);
+
+  if (skybox_enabled_ && skybox_program_ != 0 && skybox_texture_ != 0) {
+    glDepthFunc(GL_LEQUAL);
+    glDepthMask(GL_FALSE);
+    glUseProgram(skybox_program_);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, skybox_texture_);
+    glUniform1i(skybox_sampler_uniform_, 0);
+    glEnableVertexAttribArray(skybox_pos_attrib_);
+    glVertexAttribPointer(skybox_pos_attrib_, 3, GL_FLOAT, GL_FALSE, 0,
+                          kSkyboxVertices);
+
+    for (int eye_index = 0; eye_index < kEyeCount; ++eye_index) {
+      float eye_from_head_raw[16];
+      CardboardLensDistortion_getEyeFromHeadMatrix(
+          lens_distortion_, eyes[eye_index], eye_from_head_raw);
+      Matrix4x4 eye_from_head = GetMatrixFromGlArray(eye_from_head_raw);
+
+      float projection_raw[16];
+      CardboardLensDistortion_getProjectionMatrix(
+          lens_distortion_, eyes[eye_index], kZNear, kZFar, projection_raw);
+      Matrix4x4 projection = GetMatrixFromGlArray(projection_raw);
+
+      Matrix4x4 view_no_trans = eye_from_head * head_view;
+      view_no_trans.m[0][3] = 0.0f;
+      view_no_trans.m[1][3] = 0.0f;
+      view_no_trans.m[2][3] = 0.0f;
+
+      Matrix4x4 skybox_vp = projection * view_no_trans;
+      std::array<float, 16> skybox_vp_gl = skybox_vp.ToGlArray();
+
+      glViewport(viewport_x[eye_index], 0, viewport_width[eye_index],
+                 screen_height_);
+      glUniformMatrix4fv(skybox_vp_uniform_, 1, GL_FALSE, skybox_vp_gl.data());
+      glDrawArrays(GL_TRIANGLES, 0, 36);
+    }
+
+    glDisableVertexAttribArray(skybox_pos_attrib_);
+    glDepthMask(GL_TRUE);
+    glDepthFunc(GL_LESS);
+  }
+
   glDisable(GL_DEPTH_TEST);
   glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
@@ -696,6 +812,14 @@ float VrMoonlightApp::GetVerticalCurvature() const {
   return vertical_curvature_percent_;
 }
 
+void VrMoonlightApp::SetSkyboxEnabled(bool enabled) {
+  skybox_enabled_ = enabled;
+}
+
+void VrMoonlightApp::SetSkyboxTexture(GLuint textureId) {
+  skybox_texture_ = textureId;
+}
+ 
 void VrMoonlightApp::UpdateModelMatrix() {
   const float half_width = kScreenWidthMeters * 0.5f * screen_size_multiplier_;
   const float half_height = half_width / kScreenAspectRatio;
