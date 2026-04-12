@@ -1024,6 +1024,9 @@ public class MediaCodecDecoderRenderer extends VideoDecoderRenderer implements C
 
                     lastRenderedFrameTimeNanos = frameTimeNanos;
                     activeWindowVideoStats.totalFramesRendered++;
+                    if (activeWindowVideoStats.totalFramesRendered % 60 == 0) {
+                        LimeLog.info("Choreographer: rendered frame #" + activeWindowVideoStats.totalFramesRendered + " (queue depth=" + outputBufferQueue.size() + ")");
+                    }
                 } catch (IllegalStateException ignored) {
                     try {
                         // Try to avoid leaking the output buffer by releasing it without rendering
@@ -1033,6 +1036,10 @@ public class MediaCodecDecoderRenderer extends VideoDecoderRenderer implements C
                         e.printStackTrace();
                         handleDecoderException(e);
                     }
+                }
+            } else {
+                if (activeWindowVideoStats.totalFramesRendered % 60 == 0) {
+                    LimeLog.warning("Choreographer: no frame to render (queue empty! queue depth=" + outputBufferQueue.size() + ")");
                 }
             }
         }
@@ -1071,11 +1078,24 @@ public class MediaCodecDecoderRenderer extends VideoDecoderRenderer implements C
             @Override
             public void run() {
                 BufferInfo info = new BufferInfo();
+                int decodeTimeoutCount = 0;
                 while (!stopping) {
                     try {
                         // Try to output a frame
                         int outIndex = videoDecoder.dequeueOutputBuffer(info, 50000);
+                        if (outIndex == MediaCodec.INFO_TRY_AGAIN_LATER) {
+                            decodeTimeoutCount++;
+                            if (decodeTimeoutCount % 10 == 0) {
+                                LimeLog.warning("Decoder thread: dequeueOutputBuffer timeout #" + decodeTimeoutCount + " (stream may be stalled)");
+                            }
+                        } else {
+                            if (decodeTimeoutCount > 0) {
+                                LimeLog.warning("Decoder thread: dequeueOutputBuffer resumed after " + decodeTimeoutCount + " timeouts (possible stall recovery)");
+                            }
+                            decodeTimeoutCount = 0;
+                        }
                         if (outIndex >= 0) {
+                            LimeLog.info("Decoder thread: got output buffer " + outIndex + " pts=" + (info.presentationTimeUs/1000) + "ms");
                             long presentationTimeUs = info.presentationTimeUs;
                             int lastIndex = outIndex;
 
@@ -1086,9 +1106,7 @@ public class MediaCodecDecoderRenderer extends VideoDecoderRenderer implements C
                                 // Get the last output buffer in the queue
                                 while ((outIndex = videoDecoder.dequeueOutputBuffer(info, 0)) >= 0) {
                                     videoDecoder.releaseOutputBuffer(lastIndex, false);
-
                                     numFramesOut++;
-
                                     lastIndex = outIndex;
                                     presentationTimeUs = info.presentationTimeUs;
                                 }
@@ -1099,19 +1117,24 @@ public class MediaCodecDecoderRenderer extends VideoDecoderRenderer implements C
                                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                                         // Use a PTS that will cause this frame to never be dropped
                                         videoDecoder.releaseOutputBuffer(lastIndex, 0);
+                                        LimeLog.info("Decoder: released frame IMMEDIATE (max smoothness) pts=" + (presentationTimeUs/1000) + "ms");
                                     }
                                     else {
                                         videoDecoder.releaseOutputBuffer(lastIndex, true);
+                                        LimeLog.info("Decoder: released frame TRUE (max smoothness) pts=" + (presentationTimeUs/1000) + "ms");
                                     }
                                 }
                                 else {
                                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                                        // Use a PTS that will cause this frame to be dropped if another comes in within
-                                        // the same V-sync period
-                                        videoDecoder.releaseOutputBuffer(lastIndex, System.nanoTime());
+                                        // Use pts=0 for immediate rendering to avoid frames being silently dropped.
+                                        // This is critical for VR where async SurfaceTexture callbacks add latency
+                                        // that exceeds the drop window used by TIMED mode.
+                                        videoDecoder.releaseOutputBuffer(lastIndex, 0);
+                                        LimeLog.info("Decoder: released frame IMMEDIATE pts=" + (presentationTimeUs/1000) + "ms");
                                     }
                                     else {
                                         videoDecoder.releaseOutputBuffer(lastIndex, true);
+                                        LimeLog.info("Decoder: released frame TRUE pts=" + (presentationTimeUs/1000) + "ms");
                                     }
                                 }
 
@@ -1138,6 +1161,9 @@ public class MediaCodecDecoderRenderer extends VideoDecoderRenderer implements C
 
                                 // Add this buffer
                                 outputBufferQueue.add(lastIndex);
+                                if (numFramesOut % 60 == 0) {
+                                    LimeLog.info("Decoder: queued frame #" + numFramesOut + " (queue depth=" + outputBufferQueue.size() + ")");
+                                }
                             }
 
                             // Add delta time to the totals (excluding probable outliers)
@@ -1177,6 +1203,7 @@ public class MediaCodecDecoderRenderer extends VideoDecoderRenderer implements C
     private boolean fetchNextInputBuffer() {
         long startTime;
         boolean codecRecovered;
+        int inputTimeoutCount = 0;
 
         if (nextInputBuffer != null) {
             // We already have an input buffer
@@ -1189,6 +1216,17 @@ public class MediaCodecDecoderRenderer extends VideoDecoderRenderer implements C
             // If we don't have an input buffer index yet, fetch one now
             while (nextInputBufferIndex < 0 && !stopping) {
                 nextInputBufferIndex = videoDecoder.dequeueInputBuffer(10000);
+                if (nextInputBufferIndex < 0) {
+                    inputTimeoutCount++;
+                    if (inputTimeoutCount % 5 == 0) {
+                        LimeLog.warning("Decoder input: dequeueInputBuffer timeout #" + inputTimeoutCount + " (waiting for network data)");
+                    }
+                } else {
+                    if (inputTimeoutCount > 0) {
+                        LimeLog.warning("Decoder input: got input buffer after " + inputTimeoutCount + " timeouts");
+                    }
+                    inputTimeoutCount = 0;
+                }
             }
 
             // Get the backing ByteBuffer for the input buffer index

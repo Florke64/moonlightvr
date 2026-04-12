@@ -6,6 +6,7 @@ import android.graphics.SurfaceTexture;
 import javax.microedition.khronos.egl.EGLConfig;
 import android.opengl.GLSurfaceView;
 import android.opengl.GLSurfaceView.Renderer;
+import android.os.SystemClock;
 import android.view.Surface;
 import android.view.SurfaceHolder;
 
@@ -62,20 +63,39 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
         nativeOnSurfaceChanged(nativeHandle, width, height);
     }
 
+    private int frameDeliverCount = 0;
+    private int frameConsumeCount = 0;
+    private long lastFrameAvailableLog = 0;
+    private long lastConsumeLog = 0;
+
     @Override
     public void onDrawFrame(GL10 gl10) {
-        if (surfaceTexture != null && frameAvailable) {
-            surfaceTexture.updateTexImage();
-            surfaceTexture.getTransformMatrix(textureTransform);
-            nativeSetTextureTransform(nativeHandle, textureTransform);
-            frameAvailable = false;
+        if (surfaceTexture != null) {
+            try {
+                surfaceTexture.updateTexImage();
+                frameConsumeCount++;
+                surfaceTexture.getTransformMatrix(textureTransform);
+                nativeSetTextureTransform(nativeHandle, textureTransform);
+                frameAvailable = false;
+                long now = SystemClock.elapsedRealtime();
+                if (frameConsumeCount % 60 == 0 || now - lastConsumeLog > 5000) {
+                    LimeLog.warning("VR render: consumed frame #" + frameConsumeCount + " (delivered=" + frameDeliverCount + ")");
+                    lastConsumeLog = now;
+                }
+            } catch (Exception e) {
+            }
         }
         nativeOnDrawFrame(nativeHandle);
     }
 
     @Override
     public void onFrameAvailable(SurfaceTexture surfaceTexture) {
-        LimeLog.info("VrRenderer.onFrameAvailable: surfaceTexture=" + surfaceTexture);
+        frameDeliverCount++;
+        long now = SystemClock.elapsedRealtime();
+        if (frameDeliverCount % 60 == 0 || now - lastFrameAvailableLog > 5000) {
+            LimeLog.warning("VR render: frame available #" + frameDeliverCount + " (consumed=" + frameConsumeCount + ")");
+            lastFrameAvailableLog = now;
+        }
         frameAvailable = true;
         glSurfaceView.requestRender();
     }
