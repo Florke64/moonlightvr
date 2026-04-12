@@ -71,6 +71,10 @@ public class PreferenceConfiguration {
     static final String ENABLE_VR_PREF_STRING = "checkbox_enable_vr";
     private static final String VR_SCREEN_DISTANCE_PREF_STRING = "seekbar_vr_screen_distance";
     private static final String VR_SCREEN_SIZE_PREF_STRING = "seekbar_vr_screen_size";
+    private static final String VR_CURVATURE_MODE_PREF_STRING = "list_vr_curvature_mode";
+    private static final String VR_CURVATURE_AMOUNT_PREF_STRING = "seekbar_vr_curvature_amount";
+    private static final String VR_HORIZONTAL_CURVATURE_PREF_STRING = "seekbar_vr_horizontal_curvature";
+    private static final String VR_VERTICAL_CURVATURE_PREF_STRING = "seekbar_vr_vertical_curvature";
 
     static final String DEFAULT_RESOLUTION = "1280x720";
     static final String DEFAULT_FPS = "60";
@@ -114,11 +118,18 @@ public class PreferenceConfiguration {
     private static final boolean DEFAULT_GAMEPAD_MOTION_FALLBACK = false;
     private static final int DEFAULT_VR_SCREEN_DISTANCE_INT = 20;
     private static final int DEFAULT_VR_SCREEN_SIZE_INT = 50;
+    private static final int DEFAULT_VR_CURVATURE_MODE_INT = 0;
+    private static final int DEFAULT_VR_CURVATURE_AMOUNT_INT = 50;
+    private static final int DEFAULT_VR_HORIZONTAL_CURVATURE_INT = 50;
+    private static final int DEFAULT_VR_VERTICAL_CURVATURE_INT = 50;
 
     public static final int FRAME_PACING_MIN_LATENCY = 0;
     public static final int FRAME_PACING_BALANCED = 1;
     public static final int FRAME_PACING_CAP_FPS = 2;
     public static final int FRAME_PACING_MAX_SMOOTHNESS = 3;
+    public static final int VR_CURVATURE_MODE_FLAT = 0;
+    public static final int VR_CURVATURE_MODE_TV_CINEMA = 1;
+    public static final int VR_CURVATURE_MODE_GAMING_SCREEN = 2;
 
     public static final String RES_360P = "640x360";
     public static final String RES_480P = "854x480";
@@ -164,6 +175,10 @@ public class PreferenceConfiguration {
     public boolean enableVr;
     public float vrScreenDistanceMeters;
     public float vrScreenSizeMultiplier;
+    public int vrCurvatureMode;
+    public float vrCurvatureAmountPercent;
+    public float vrHorizontalCurvaturePercent;
+    public float vrVerticalCurvaturePercent;
 
     public static boolean isNativeResolution(int width, int height) {
         // It's not a native resolution if it matches an existing resolution option
@@ -423,6 +438,16 @@ public class PreferenceConfiguration {
         }
     }
 
+    private static int getCurvatureModeValue(SharedPreferences prefs) {
+        String str = prefs.getString(VR_CURVATURE_MODE_PREF_STRING, "flat");
+        if (str.equals("tv_cinema")) {
+            return VR_CURVATURE_MODE_TV_CINEMA;
+        } else if (str.equals("gaming_screen")) {
+            return VR_CURVATURE_MODE_GAMING_SCREEN;
+        }
+        return VR_CURVATURE_MODE_FLAT;
+    }
+
     public static void resetStreamingSettings(Context context) {
         // We consider resolution, FPS, bitrate, HDR, and video format as "streaming settings" here
         SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
@@ -596,6 +621,10 @@ public class PreferenceConfiguration {
         config.vrScreenDistanceMeters = vrDistanceRaw / 10f;
         int vrSizeRaw = prefs.getInt(VR_SCREEN_SIZE_PREF_STRING, DEFAULT_VR_SCREEN_SIZE_INT);
         config.vrScreenSizeMultiplier = vrSizeRaw / 50f;
+        config.vrCurvatureMode = getCurvatureModeValue(prefs);
+        config.vrCurvatureAmountPercent = prefs.getInt(VR_CURVATURE_AMOUNT_PREF_STRING, DEFAULT_VR_CURVATURE_AMOUNT_INT);
+        config.vrHorizontalCurvaturePercent = prefs.getInt(VR_HORIZONTAL_CURVATURE_PREF_STRING, DEFAULT_VR_HORIZONTAL_CURVATURE_INT);
+        config.vrVerticalCurvaturePercent = prefs.getInt(VR_VERTICAL_CURVATURE_PREF_STRING, DEFAULT_VR_VERTICAL_CURVATURE_INT);
         config.enablePip = prefs.getBoolean(ENABLE_PIP_PREF_STRING, DEFAULT_ENABLE_PIP);
         config.enablePerfOverlay = prefs.getBoolean(ENABLE_PERF_OVERLAY_STRING, DEFAULT_ENABLE_PERF_OVERLAY);
         config.bindAllUsb = prefs.getBoolean(BIND_ALL_USB_STRING, DEFAULT_BIND_ALL_USB);

@@ -2,6 +2,7 @@
 #define VR_RENDERER_H_
 
 #include <array>
+#include <vector>
 
 #include <android/asset_manager.h>
 #include <android/asset_manager_jni.h>
@@ -14,6 +15,9 @@ namespace moonlight_vr {
 
 class VrMoonlightApp {
  public:
+  static constexpr int kCurvatureModeFlat = 0;
+  static constexpr int kCurvatureModeTvCinema = 1;
+  static constexpr int kCurvatureModeGamingScreen = 2;
   VrMoonlightApp(JavaVM* vm, jobject activity, jobject asset_manager);
   ~VrMoonlightApp();
 
@@ -27,6 +31,13 @@ class VrMoonlightApp {
   void SetScreenSize(float sizeMultiplier);
   void AdjustScreenDistance(float deltaMeters);
   void AdjustScreenSize(float deltaMultiplier);
+  void SetCurvatureMode(int mode);
+  void SetCurvatureAmount(float percent);
+  void SetHorizontalCurvature(float percent);
+  void SetVerticalCurvature(float percent);
+  float GetCurvatureAmount() const;
+  float GetHorizontalCurvature() const;
+  float GetVerticalCurvature() const;
   void SetCurrentFramePose(const std::array<float, 4>& orientation);
   void RecenterView();
 
@@ -38,6 +49,7 @@ class VrMoonlightApp {
                             const std::array<float, 4>& head_orientation);
   void DestroyCardboardResources();
   void UpdateModelMatrix();
+  void UpdateScreenGeometry();
 
   JavaVM* java_vm_;
   jobject activity_;
@@ -74,6 +86,15 @@ class VrMoonlightApp {
   Matrix4x4 model_matrix_;
   float screen_distance_meters_;
   float screen_size_multiplier_;
+  int curvature_mode_;
+  float curvature_amount_percent_;
+  float horizontal_curvature_percent_;
+  float vertical_curvature_percent_;
+  std::vector<GLfloat> screen_vertices_;
+  std::vector<GLfloat> screen_texcoords_;
+  bool using_curved_geometry_;
+  int curved_rows_;
+  int curved_vertices_per_strip_;
   std::array<float, 4> last_rendered_orientation_;
   bool has_render_pose_;
   std::array<float, 4> recenter_offset_;
@@ -81,6 +102,7 @@ class VrMoonlightApp {
   std::array<float, 4> current_recenter_offset_;
   bool has_current_recenter_offset_;
   int64_t last_recenter_update_nanos_;
+  bool geometry_dirty_;
 };
 
 }  // namespace moonlight_vr

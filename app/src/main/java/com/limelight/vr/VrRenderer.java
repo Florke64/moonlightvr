@@ -18,6 +18,10 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
         System.loadLibrary("vr_renderer");
     }
 
+    public static final int CURVATURE_MODE_FLAT = 0;
+    public static final int CURVATURE_MODE_TV_CINEMA = 1;
+    public static final int CURVATURE_MODE_GAMING_SCREEN = 2;
+
     public interface SurfaceListener {
         void onSurfaceReady(Surface surface);
     }
@@ -125,6 +129,34 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
         nativeRecenterView(nativeHandle);
     }
 
+    public void setCurvatureMode(int mode) {
+        nativeSetCurvatureMode(nativeHandle, mode);
+    }
+
+    public void setCurvatureAmount(float percent) {
+        nativeSetCurvatureAmount(nativeHandle, percent);
+    }
+
+    public void setHorizontalCurvature(float percent) {
+        nativeSetHorizontalCurvature(nativeHandle, percent);
+    }
+
+    public void setVerticalCurvature(float percent) {
+        nativeSetVerticalCurvature(nativeHandle, percent);
+    }
+
+    public float getCurvatureAmount() {
+        return nativeGetCurvatureAmount(nativeHandle);
+    }
+
+    public float getHorizontalCurvature() {
+        return nativeGetHorizontalCurvature(nativeHandle);
+    }
+
+    public float getVerticalCurvature() {
+        return nativeGetVerticalCurvature(nativeHandle);
+    }
+
     private native long nativeCreate(Context context, AssetManager assetManager);
     private native void nativeDestroy(long handle);
     private native int nativeOnSurfaceCreated(long handle);
@@ -138,4 +170,11 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
     private native void nativeAdjustScreenDistance(long handle, float deltaMeters);
     private native void nativeAdjustScreenSize(long handle, float deltaMultiplier);
     private native void nativeRecenterView(long handle);
+    private native void nativeSetCurvatureMode(long handle, int mode);
+    private native void nativeSetCurvatureAmount(long handle, float percent);
+    private native void nativeSetHorizontalCurvature(long handle, float percent);
+    private native void nativeSetVerticalCurvature(long handle, float percent);
+    private native float nativeGetCurvatureAmount(long handle);
+    private native float nativeGetHorizontalCurvature(long handle);
+    private native float nativeGetVerticalCurvature(long handle);
 }

@@ -33,6 +33,13 @@ constexpr float kDefaultScreenDistanceMeters = 2.0f;
 
 constexpr int kEyeCount = 2;
 
+constexpr float kMaxHorizontalCurvatureAngle = 3.14159265358979323846f;
+constexpr float kMaxVerticalCurvatureAngle = 1.57079632679489661923f;
+constexpr int kCurvedGridCols = 64;
+constexpr int kCurvedGridRowsTv = 32;
+constexpr int kCurvedGridRowsGaming = 2;
+constexpr float kMinCurvatureAngle = 0.0001f;
+
 const GLfloat kQuadVertices[] = {
     -1.f, -1.f, 0.f,
      1.f, -1.f, 0.f,
@@ -115,13 +122,21 @@ VrMoonlightApp::VrMoonlightApp(JavaVM* vm, jobject activity, jobject asset_manag
       model_matrix_(),
       screen_distance_meters_(kDefaultScreenDistanceMeters),
       screen_size_multiplier_(1.0f),
+      curvature_mode_(VrMoonlightApp::kCurvatureModeFlat),
+      curvature_amount_percent_(50.f),
+      horizontal_curvature_percent_(50.f),
+      vertical_curvature_percent_(50.f),
+      using_curved_geometry_(false),
+      curved_rows_(0),
+      curved_vertices_per_strip_(0),
       last_rendered_orientation_{0.f, 0.f, 0.f, 1.f},
       has_render_pose_(false),
       recenter_offset_{0.f, 0.f, 0.f, 1.f},
       has_recenter_offset_(false),
       current_recenter_offset_{0.f, 0.f, 0.f, 1.f},
       has_current_recenter_offset_(false),
-      last_recenter_update_nanos_(0) {
+      last_recenter_update_nanos_(0),
+      geometry_dirty_(true) {
   std::fill(std::begin(texture_transform_), std::end(texture_transform_), 0.f);
   texture_transform_[0] = texture_transform_[5] = texture_transform_[10] =
       texture_transform_[15] = 1.f;
@@ -153,6 +168,7 @@ VrMoonlightApp::VrMoonlightApp(JavaVM* vm, jobject activity, jobject asset_manag
   }
 
   UpdateModelMatrix();
+  UpdateScreenGeometry();
 }
 
 VrMoonlightApp::~VrMoonlightApp() {
@@ -246,6 +262,11 @@ void VrMoonlightApp::SetTextureTransform(const float* transform) {
 }
 
 void VrMoonlightApp::OnDrawFrame() {
+  if (geometry_dirty_) {
+    UpdateScreenGeometry();
+    geometry_dirty_ = false;
+  }
+
   if (screen_width_ == 0 || screen_height_ == 0) {
     return;
   }
@@ -493,12 +514,24 @@ void VrMoonlightApp::RenderVideoToTexture(
   glEnable(GL_DEPTH_TEST);
 
   glUseProgram(video_program_);
+  const bool use_curved_geometry = using_curved_geometry_ &&
+      !screen_vertices_.empty() && !screen_texcoords_.empty();
   glEnableVertexAttribArray(position_attrib_);
-  glVertexAttribPointer(position_attrib_, 3, GL_FLOAT, GL_FALSE,
-                         sizeof(GLfloat) * 3, kQuadVertices);
+  if (use_curved_geometry) {
+    glVertexAttribPointer(position_attrib_, 3, GL_FLOAT, GL_FALSE, 0,
+                           screen_vertices_.data());
+  } else {
+    glVertexAttribPointer(position_attrib_, 3, GL_FLOAT, GL_FALSE,
+                           sizeof(GLfloat) * 3, kQuadVertices);
+  }
   glEnableVertexAttribArray(texcoord_attrib_);
-  glVertexAttribPointer(texcoord_attrib_, 2, GL_FLOAT, GL_FALSE, 0,
-                        kQuadTexCoords);
+  if (use_curved_geometry) {
+    glVertexAttribPointer(texcoord_attrib_, 2, GL_FLOAT, GL_FALSE, 0,
+                          screen_texcoords_.data());
+  } else {
+    glVertexAttribPointer(texcoord_attrib_, 2, GL_FLOAT, GL_FALSE, 0,
+                          kQuadTexCoords);
+  }
   glUniformMatrix4fv(texture_transform_uniform_, 1, GL_FALSE, texture_transform_);
   glActiveTexture(GL_TEXTURE0);
   glBindTexture(GL_TEXTURE_EXTERNAL_OES, video_texture_);
@@ -533,7 +566,15 @@ void VrMoonlightApp::RenderVideoToTexture(
     glViewport(viewport_x[eye_index], 0, viewport_width[eye_index], screen_height_);
     glClear(GL_DEPTH_BUFFER_BIT);
     glUniformMatrix4fv(mvp_uniform_, 1, GL_FALSE, mvp_gl.data());
-    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+    if (use_curved_geometry) {
+      for (int row = 0; row < curved_rows_; ++row) {
+        glDrawArrays(GL_TRIANGLE_STRIP,
+                     row * curved_vertices_per_strip_,
+                     curved_vertices_per_strip_);
+      }
+    } else {
+      glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+    }
   }
 
   glDisableVertexAttribArray(position_attrib_);
@@ -596,6 +637,7 @@ void VrMoonlightApp::SetScreenSize(float sizeMultiplier) {
     screen_size_multiplier_ = 2.0f;
   }
   UpdateModelMatrix();
+  geometry_dirty_ = true;
 }
 
 void VrMoonlightApp::AdjustScreenDistance(float deltaMeters) {
@@ -616,6 +658,42 @@ void VrMoonlightApp::AdjustScreenSize(float deltaMultiplier) {
     screen_size_multiplier_ = 2.0f;
   }
   UpdateModelMatrix();
+  geometry_dirty_ = true;
+}
+
+void VrMoonlightApp::SetCurvatureMode(int mode) {
+  if (mode < kCurvatureModeFlat || mode > kCurvatureModeGamingScreen) {
+    return;
+  }
+  curvature_mode_ = mode;
+  geometry_dirty_ = true;
+}
+
+void VrMoonlightApp::SetCurvatureAmount(float percent) {
+  curvature_amount_percent_ = std::clamp(percent, 0.f, 100.f);
+  geometry_dirty_ = true;
+}
+
+void VrMoonlightApp::SetHorizontalCurvature(float percent) {
+  horizontal_curvature_percent_ = std::clamp(percent, 0.f, 100.f);
+  geometry_dirty_ = true;
+}
+
+void VrMoonlightApp::SetVerticalCurvature(float percent) {
+  vertical_curvature_percent_ = std::clamp(percent, 0.f, 100.f);
+  geometry_dirty_ = true;
+}
+
+float VrMoonlightApp::GetCurvatureAmount() const {
+  return curvature_amount_percent_;
+}
+
+float VrMoonlightApp::GetHorizontalCurvature() const {
+  return horizontal_curvature_percent_;
+}
+
+float VrMoonlightApp::GetVerticalCurvature() const {
+  return vertical_curvature_percent_;
 }
 
 void VrMoonlightApp::UpdateModelMatrix() {
@@ -624,6 +702,89 @@ void VrMoonlightApp::UpdateModelMatrix() {
   const std::array<float, 3> scale = {half_width, -half_height, 1.0f};
   const std::array<float, 3> translation = {0.0f, 0.0f, -screen_distance_meters_};
   model_matrix_ = GetTranslationMatrix(translation) * GetScaleMatrix(scale);
+}
+
+void VrMoonlightApp::UpdateScreenGeometry() {
+  const float half_width = kScreenWidthMeters * 0.5f * screen_size_multiplier_;
+  const float half_height = half_width / kScreenAspectRatio;
+
+  float global_ratio = curvature_amount_percent_ / 100.0f;
+  float h_ratio = global_ratio * (horizontal_curvature_percent_ / 100.0f);
+  float v_ratio = global_ratio * (vertical_curvature_percent_ / 100.0f);
+
+  if (curvature_mode_ == kCurvatureModeGamingScreen) {
+    v_ratio = 0.0f;
+  }
+
+  if (curvature_mode_ == kCurvatureModeFlat || (h_ratio <= 0.001f && v_ratio <= 0.001f)) {
+    using_curved_geometry_ = false;
+    curved_rows_ = 0;
+    curved_vertices_per_strip_ = 0;
+    screen_vertices_.clear();
+    screen_texcoords_.clear();
+    return;
+  }
+
+  curved_rows_ = (curvature_mode_ == kCurvatureModeTvCinema) ? kCurvedGridRowsTv : kCurvedGridRowsGaming;
+  curved_vertices_per_strip_ = (kCurvedGridCols + 1) * 2;
+  const float rows_float = static_cast<float>(curved_rows_);
+
+  const float max_theta = h_ratio * kMaxHorizontalCurvatureAngle;
+  const float max_phi = v_ratio * kMaxVerticalCurvatureAngle;
+
+  screen_vertices_.clear();
+  screen_texcoords_.clear();
+  screen_vertices_.reserve(curved_rows_ * curved_vertices_per_strip_ * 3);
+  screen_texcoords_.reserve(curved_rows_ * curved_vertices_per_strip_ * 2);
+
+  for (int row = 0; row < curved_rows_; ++row) {
+    for (int col = 0; col <= kCurvedGridCols; ++col) {
+      const float u = static_cast<float>(col) / static_cast<float>(kCurvedGridCols);
+      float flat_x = (u - 0.5f) * 2.0f * half_width;
+
+      for (int v_idx = 0; v_idx < 2; ++v_idx) {
+        const float v_norm = (static_cast<float>(row + v_idx) / rows_float);
+        float flat_y = (v_norm - 0.5f) * 2.0f * half_height;
+
+        float phys_x = flat_x;
+        float phys_y = flat_y;
+        float phys_z = 0.0f;
+
+        if (curvature_mode_ == kCurvatureModeGamingScreen) {
+          if (max_theta > 0.001f) {
+            float radius = (2.0f * half_width) / max_theta;
+            float theta = flat_x / radius;
+            phys_x = radius * std::sin(theta);
+            phys_z = radius * (1.0f - std::cos(theta));
+          }
+        } else if (curvature_mode_ == kCurvatureModeTvCinema) {
+          float r_h = (max_theta > 0.001f) ? ((2.0f * half_width) / max_theta) : 10000.0f;
+          float r_v = (max_phi > 0.001f) ? ((2.0f * half_height) / max_phi) : 10000.0f;
+
+          float theta = (max_theta > 0.001f) ? (flat_x / r_h) : 0.0f;
+          float phi = (max_phi > 0.001f) ? (flat_y / r_v) : 0.0f;
+
+          phys_x = r_h * std::sin(theta) * std::cos(phi);
+          phys_y = r_v * std::sin(phi);
+
+          float z_h = r_h * (1.0f - std::cos(theta));
+          float z_v = r_v * (1.0f - std::cos(phi));
+          phys_z = z_h * std::cos(phi) + z_v;
+        }
+
+        float final_x = phys_x / half_width;
+        float final_y = phys_y / half_height;
+        float final_z = phys_z;
+
+        screen_vertices_.push_back(final_x);
+        screen_vertices_.push_back(final_y);
+        screen_vertices_.push_back(final_z);
+        screen_texcoords_.push_back(u);
+        screen_texcoords_.push_back(1.0f - v_norm);
+      }
+    }
+  }
+  using_curved_geometry_ = true;
 }
 
 }  // namespace moonlight_vr

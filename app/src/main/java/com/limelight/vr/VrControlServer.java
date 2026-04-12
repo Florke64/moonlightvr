@@ -125,6 +125,9 @@ public class VrControlServer extends NanoHTTPD {
 
     private static final float ZOOM_STEP = 0.2f;
     private static final float SCREEN_SIZE_STEP = 0.1f;
+    private static final float CURVATURE_STEP = 10f;
+    private static final float HORIZONTAL_CURVE_STEP = 10f;
+    private static final float VERTICAL_CURVE_STEP = 10f;
 
     @Override
     public Response serve(IHTTPSession session) {
@@ -161,6 +164,60 @@ public class VrControlServer extends NanoHTTPD {
                 return newFixedLengthResponse(Response.Status.OK, "application/json", "{\"status\":\"ok\",\"action\":\"screendown\"}");
             }
             return newFixedLengthResponse(Response.Status.SERVICE_UNAVAILABLE, "application/json", "{\"error\":\"no renderer\"}");
+        } else if (uri.equals("/curvature-flat")) {
+            if (vrRenderer != null) {
+                vrRenderer.setCurvatureMode(VrRenderer.CURVATURE_MODE_FLAT);
+                return newFixedLengthResponse(Response.Status.OK, "application/json", "{\"status\":\"ok\",\"action\":\"curvature-flat\"}");
+            }
+            return newFixedLengthResponse(Response.Status.SERVICE_UNAVAILABLE, "application/json", "{\"error\":\"no renderer\"}");
+        } else if (uri.equals("/curvature-tv")) {
+            if (vrRenderer != null) {
+                vrRenderer.setCurvatureMode(VrRenderer.CURVATURE_MODE_TV_CINEMA);
+                return newFixedLengthResponse(Response.Status.OK, "application/json", "{\"status\":\"ok\",\"action\":\"curvature-tv\"}");
+            }
+            return newFixedLengthResponse(Response.Status.SERVICE_UNAVAILABLE, "application/json", "{\"error\":\"no renderer\"}");
+        } else if (uri.equals("/curvature-gaming")) {
+            if (vrRenderer != null) {
+                vrRenderer.setCurvatureMode(VrRenderer.CURVATURE_MODE_GAMING_SCREEN);
+                return newFixedLengthResponse(Response.Status.OK, "application/json", "{\"status\":\"ok\",\"action\":\"curvature-gaming\"}");
+            }
+            return newFixedLengthResponse(Response.Status.SERVICE_UNAVAILABLE, "application/json", "{\"error\":\"no renderer\"}");
+        } else if (uri.equals("/curvature-increase")) {
+            if (vrRenderer != null) {
+                vrRenderer.setCurvatureAmount(vrRenderer.getCurvatureAmount() + CURVATURE_STEP);
+                return newFixedLengthResponse(Response.Status.OK, "application/json", "{\"status\":\"ok\",\"action\":\"curvature-increase\"}");
+            }
+            return newFixedLengthResponse(Response.Status.SERVICE_UNAVAILABLE, "application/json", "{\"error\":\"no renderer\"}");
+        } else if (uri.equals("/curvature-decrease")) {
+            if (vrRenderer != null) {
+                vrRenderer.setCurvatureAmount(vrRenderer.getCurvatureAmount() - CURVATURE_STEP);
+                return newFixedLengthResponse(Response.Status.OK, "application/json", "{\"status\":\"ok\",\"action\":\"curvature-decrease\"}");
+            }
+            return newFixedLengthResponse(Response.Status.SERVICE_UNAVAILABLE, "application/json", "{\"error\":\"no renderer\"}");
+        } else if (uri.equals("/horizontal-increase")) {
+            if (vrRenderer != null) {
+                vrRenderer.setHorizontalCurvature(vrRenderer.getHorizontalCurvature() + HORIZONTAL_CURVE_STEP);
+                return newFixedLengthResponse(Response.Status.OK, "application/json", "{\"status\":\"ok\",\"action\":\"horizontal-increase\"}");
+            }
+            return newFixedLengthResponse(Response.Status.SERVICE_UNAVAILABLE, "application/json", "{\"error\":\"no renderer\"}");
+        } else if (uri.equals("/horizontal-decrease")) {
+            if (vrRenderer != null) {
+                vrRenderer.setHorizontalCurvature(vrRenderer.getHorizontalCurvature() - HORIZONTAL_CURVE_STEP);
+                return newFixedLengthResponse(Response.Status.OK, "application/json", "{\"status\":\"ok\",\"action\":\"horizontal-decrease\"}");
+            }
+            return newFixedLengthResponse(Response.Status.SERVICE_UNAVAILABLE, "application/json", "{\"error\":\"no renderer\"}");
+        } else if (uri.equals("/vertical-increase")) {
+            if (vrRenderer != null) {
+                vrRenderer.setVerticalCurvature(vrRenderer.getVerticalCurvature() + VERTICAL_CURVE_STEP);
+                return newFixedLengthResponse(Response.Status.OK, "application/json", "{\"status\":\"ok\",\"action\":\"vertical-increase\"}");
+            }
+            return newFixedLengthResponse(Response.Status.SERVICE_UNAVAILABLE, "application/json", "{\"error\":\"no renderer\"}");
+        } else if (uri.equals("/vertical-decrease")) {
+            if (vrRenderer != null) {
+                vrRenderer.setVerticalCurvature(vrRenderer.getVerticalCurvature() - VERTICAL_CURVE_STEP);
+                return newFixedLengthResponse(Response.Status.OK, "application/json", "{\"status\":\"ok\",\"action\":\"vertical-decrease\"}");
+            }
+            return newFixedLengthResponse(Response.Status.SERVICE_UNAVAILABLE, "application/json", "{\"error\":\"no renderer\"}");
         }
         return serveStaticAsset(uri);
     }
@@ -187,6 +244,23 @@ public class VrControlServer extends NanoHTTPD {
             "<div class=\"row\"><button class=\"btn\" onclick=\"fetch('/screenup')\">Bigger</button>" +
             "<button class=\"btn\" onclick=\"fetch('/screendown')\">Smaller</button></div>" +
             "<p>Adjust virtual screen size</p></div>" +
+            "<div class=\"card\"><h2>Curvature Preset</h2>" +
+            "<div class=\"row\"><button class=\"btn\" onclick=\"fetch('/curvature-flat')\">Flat</button>" +
+            "<button class=\"btn\" onclick=\"fetch('/curvature-tv')\">Void Sphere</button>" +
+            "<button class=\"btn\" onclick=\"fetch('/curvature-gaming')\">Gaming Monitor</button></div>" +
+            "<p>Choose screen shape for VR view</p></div>" +
+            "<div class=\"card\"><h2>Curvature Intensity</h2>" +
+            "<div class=\"row\"><button class=\"btn\" onclick=\"fetch('/curvature-decrease')\">Less</button>" +
+            "<button class=\"btn\" onclick=\"fetch('/curvature-increase')\">More</button></div>" +
+            "<p>Control how much screen wraps around you</p></div>" +
+            "<div class=\"card\"><h2>Horizontal Curve</h2>" +
+            "<div class=\"row\"><button class=\"btn\" onclick=\"fetch('/horizontal-decrease')\">Less</button>" +
+            "<button class=\"btn\" onclick=\"fetch('/horizontal-increase')\">More</button></div>" +
+            "<p>Adjust horizontal bend (Void Sphere mode)</p></div>" +
+            "<div class=\"card\"><h2>Vertical Curve</h2>" +
+            "<div class=\"row\"><button class=\"btn\" onclick=\"fetch('/vertical-decrease')\">Less</button>" +
+            "<button class=\"btn\" onclick=\"fetch('/vertical-increase')\">More</button></div>" +
+            "<p>Adjust vertical bend (Void Sphere mode only)</p></div>" +
             "<div class=\"card\"><h2>View</h2>" +
             "<button class=\"btn\" onclick=\"fetch('/recenter')\">Recenter View</button>" +
             "<p>Reset view orientation to center</p></div>" +

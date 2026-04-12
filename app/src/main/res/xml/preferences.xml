@@ -68,6 +68,43 @@
             android:defaultValue="50"
             android:summary="@string/summary_seekbar_vr_screen_size"
             android:title="@string/title_seekbar_vr_screen_size" />
+        <ListPreference
+            android:key="list_vr_curvature_mode"
+            android:title="@string/title_list_vr_curvature_mode"
+            android:summary="@string/summary_list_vr_curvature_mode"
+            android:entries="@array/vr_curvature_mode_names"
+            android:entryValues="@array/vr_curvature_mode_values"
+            android:defaultValue="flat" />
+        <com.limelight.preferences.SeekBarPreference
+            android:key="seekbar_vr_curvature_amount"
+            android:dialogMessage="@string/summary_seekbar_vr_curvature_amount"
+            seekbar:min="0"
+            android:max="100"
+            seekbar:step="1"
+            android:defaultValue="50"
+            android:summary="@string/summary_seekbar_vr_curvature_amount"
+            android:text="@string/suffix_seekbar_vr_curvature_percent"
+            android:title="@string/title_seekbar_vr_curvature_amount" />
+        <com.limelight.preferences.SeekBarPreference
+            android:key="seekbar_vr_horizontal_curvature"
+            android:dialogMessage="@string/summary_seekbar_vr_horizontal_curvature"
+            seekbar:min="0"
+            android:max="100"
+            seekbar:step="1"
+            android:defaultValue="50"
+            android:summary="@string/summary_seekbar_vr_horizontal_curvature"
+            android:text="@string/suffix_seekbar_vr_curvature_percent"
+            android:title="@string/title_seekbar_vr_horizontal_curvature" />
+        <com.limelight.preferences.SeekBarPreference
+            android:key="seekbar_vr_vertical_curvature"
+            android:dialogMessage="@string/summary_seekbar_vr_vertical_curvature"
+            seekbar:min="0"
+            android:max="100"
+            seekbar:step="1"
+            android:defaultValue="50"
+            android:summary="@string/summary_seekbar_vr_vertical_curvature"
+            android:text="@string/suffix_seekbar_vr_curvature_percent"
+            android:title="@string/title_seekbar_vr_vertical_curvature" />
     </PreferenceCategory>
     <PreferenceCategory android:title="@string/category_audio_settings">
         <ListPreference

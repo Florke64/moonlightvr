@@ -131,4 +131,14 @@
         <item>right</item>
         <item>left</item>
     </string-array>
+    <string-array name="vr_curvature_mode_names">
+        <item>@string/vr_curvature_mode_flat</item>
+        <item>@string/vr_curvature_mode_tv_cinema</item>
+        <item>@string/vr_curvature_mode_gaming_screen</item>
+    </string-array>
+    <string-array name="vr_curvature_mode_values" translatable="false">
+        <item>flat</item>
+        <item>tv_cinema</item>
+        <item>gaming_screen</item>
+    </string-array>
 </resources>

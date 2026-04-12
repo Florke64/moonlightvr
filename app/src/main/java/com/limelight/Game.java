@@ -251,6 +251,10 @@ vrMode = getIntent().getBooleanExtra(EXTRA_ENABLE_VR, false) ||
                 vrRenderer = new VrRenderer(this, vrSurfaceView, vrSurfaceListener);
                 vrRenderer.setScreenDistance(prefConfig.vrScreenDistanceMeters);
                 vrRenderer.setScreenSize(prefConfig.vrScreenSizeMultiplier);
+                vrRenderer.setCurvatureMode(prefConfig.vrCurvatureMode);
+                vrRenderer.setCurvatureAmount(prefConfig.vrCurvatureAmountPercent);
+                vrRenderer.setHorizontalCurvature(prefConfig.vrHorizontalCurvaturePercent);
+                vrRenderer.setVerticalCurvature(prefConfig.vrVerticalCurvaturePercent);
                 vrSurfaceView.setEGLContextClientVersion(2);
                 vrSurfaceView.setRenderer(vrRenderer);
                 vrSurfaceView.setRenderMode(GLSurfaceView.RENDERMODE_CONTINUOUSLY);

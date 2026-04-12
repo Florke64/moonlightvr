@@ -74,9 +74,55 @@ Java_com_limelight_vr_VrRenderer_nativeAdjustScreenDistance(JNIEnv*, jobject,
 
 extern "C" JNIEXPORT void JNICALL
 Java_com_limelight_vr_VrRenderer_nativeAdjustScreenSize(JNIEnv*, jobject,
-                                                     jlong handle,
-                                                     jfloat deltaMultiplier) {
+                                                      jlong handle,
+                                                      jfloat deltaMultiplier) {
   FromHandle(handle)->AdjustScreenSize(deltaMultiplier);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_limelight_vr_VrRenderer_nativeSetCurvatureMode(JNIEnv*, jobject,
+                                                      jlong handle,
+                                                      jint mode) {
+  FromHandle(handle)->SetCurvatureMode(mode);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_limelight_vr_VrRenderer_nativeSetCurvatureAmount(JNIEnv*, jobject,
+                                                        jlong handle,
+                                                        jfloat percent) {
+  FromHandle(handle)->SetCurvatureAmount(percent);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_limelight_vr_VrRenderer_nativeSetHorizontalCurvature(JNIEnv*, jobject,
+                                                            jlong handle,
+                                                            jfloat percent) {
+  FromHandle(handle)->SetHorizontalCurvature(percent);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_limelight_vr_VrRenderer_nativeSetVerticalCurvature(JNIEnv*, jobject,
+                                                          jlong handle,
+                                                          jfloat percent) {
+  FromHandle(handle)->SetVerticalCurvature(percent);
+}
+
+extern "C" JNIEXPORT jfloat JNICALL
+Java_com_limelight_vr_VrRenderer_nativeGetCurvatureAmount(JNIEnv*, jobject,
+                                                        jlong handle) {
+  return FromHandle(handle)->GetCurvatureAmount();
+}
+
+extern "C" JNIEXPORT jfloat JNICALL
+Java_com_limelight_vr_VrRenderer_nativeGetHorizontalCurvature(JNIEnv*, jobject,
+                                                            jlong handle) {
+  return FromHandle(handle)->GetHorizontalCurvature();
+}
+
+extern "C" JNIEXPORT jfloat JNICALL
+Java_com_limelight_vr_VrRenderer_nativeGetVerticalCurvature(JNIEnv*, jobject,
+                                                          jlong handle) {
+  return FromHandle(handle)->GetVerticalCurvature();
 }
 
 extern "C" JNIEXPORT void JNICALL
