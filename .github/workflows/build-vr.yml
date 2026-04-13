@@ -3,13 +3,6 @@ name: Build VR fork (test)
 on:
   workflow_dispatch:
     inputs:
-      flavor:
-        description: 'Flavor'
-        required: true
-        default: 'nonRoot'
-        type: choice
-        options:
-          - nonRoot
       build_type:
         description: 'Build Type'
         required: true
@@ -47,29 +40,34 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
+      - name: Read version from gradle
+        id: version
+        run: |
+          VERSION_NAME=$(grep -oP 'versionName\s+"\K[0-9.]+' app/build.gradle)
+          WORKFLOW_VERSION="${VERSION_NAME}.${GITHUB_RUN_NUMBER}"
+          echo "VERSION_NAME=$VERSION_NAME" >> $GITHUB_OUTPUT
+          echo "WORKFLOW_VERSION=$WORKFLOW_VERSION" >> $GITHUB_OUTPUT
+
       - name: Build production APK
         run: |
-          FLAVOR_INPUT="${{ github.event.inputs.flavor || 'nonRoot' }}"
           BUILD_TYPE_INPUT="${{ github.event.inputs.build_type || 'release' }}"
-          FLAVOR=$(echo "${FLAVOR_INPUT}" | sed 's/./\U&/')
           BUILD_TYPE=$(echo "${BUILD_TYPE_INPUT}" | sed 's/./\U&/')
           GRADLE_OPTS=""
           BRANCH_NAME="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}"
           if [[ "$BRANCH_NAME" == "main" || "$BRANCH_NAME" == "refs/heads/main" || "$BRANCH_NAME" == main ]]; then
             GRADLE_OPTS="-PincludeX64"
           fi
-          ./gradlew :app:assemble${FLAVOR}${BUILD_TYPE} $GRADLE_OPTS --no-daemon
+          ./gradlew :app:assembleVrMode${BUILD_TYPE} $GRADLE_OPTS --no-daemon
 
       - name: Rename APK with metadata
         run: |
-          FLAVOR=${{ github.event.inputs.flavor }}
-          BUILD_TYPE=${{ github.event.inputs.build_type }}
-          TIMESTAMP=$(date +'%Y%m%d_%H%M%S')
+          BUILD_TYPE="${{ github.event.inputs.build_type || 'release' }}"
+          WORKFLOW_VERSION="${{ steps.version.outputs.WORKFLOW_VERSION }}"
           SHA_SHORT=$(echo ${{ github.sha }} | cut -c1-8)
-          APK_PATH="app/build/outputs/apk/${FLAVOR,,}/${BUILD_TYPE}/app-${FLAVOR,,}-${BUILD_TYPE}.apk"
+          APK_PATH="app/build/outputs/apk/vrMode/${BUILD_TYPE,,}/app-vrMode-${BUILD_TYPE,,}.apk"
           
           if [ -f "$APK_PATH" ]; then
-            NEW_NAME="MoonlightVR-${FLAVOR}-${BUILD_TYPE}-${TIMESTAMP}-${SHA_SHORT}.apk"
+            NEW_NAME="MoonlightVR-VrMode-${WORKFLOW_VERSION}.apk"
             cp "$APK_PATH" "$NEW_NAME"
             echo "APK_NAME=$NEW_NAME" >> $GITHUB_ENV
             echo "APK exists at: $APK_PATH"
@@ -77,11 +75,12 @@ jobs:
             echo "Error: APK not found at $APK_PATH"
             exit 1
           fi
+          echo "WORKFLOW_VERSION=${WORKFLOW_VERSION}" >> $GITHUB_ENV
 
       - name: Upload APK as artifact
         uses: actions/upload-artifact@v4
         with:
-          name: MoonlightVR-${{ github.event.inputs.flavor }}-${{ github.event.inputs.build_type }}
+          name: MoonlightVR-VrMode-${{ steps.version.outputs.WORKFLOW_VERSION }}
           path: MoonlightVR-*.apk
           retention-days: 30
 
@@ -100,12 +99,14 @@ jobs:
         run: |
           BRANCH_NAME="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}"
           BRANCH_NAME="${BRANCH_NAME:-manual}"
+          WORKFLOW_VERSION="${{ steps.version.outputs.WORKFLOW_VERSION }}"
           echo "## Build Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
           echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
           echo "| Branch | $BRANCH_NAME |" >> $GITHUB_STEP_SUMMARY
-          echo "| Flavor | ${{ github.event.inputs.flavor }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Build Type | ${{ github.event.inputs.build_type }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Flavor | vrMode |" >> $GITHUB_STEP_SUMMARY
+          echo "| Build Type | ${{ github.event.inputs.build_type || 'release' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Version | ${WORKFLOW_VERSION:-unknown} |" >> $GITHUB_STEP_SUMMARY
           echo "| Commit | ${{ github.sha }} |" >> $GITHUB_STEP_SUMMARY
           echo "| APK | ${{ env.APK_NAME }} |" >> $GITHUB_STEP_SUMMARY

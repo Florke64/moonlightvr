@@ -8,10 +8,10 @@ android {
     namespace 'com.limelight'
 
     defaultConfig {
-        minSdk 21
+        minSdk 26
         targetSdk 34
 
-        versionName "12.1"
+        versionName "2026.4.0"
         versionCode = 314
 
         // Generate native debug symbols to allow Google Play to symbolicate our native crashes
@@ -34,10 +34,10 @@ android {
     }
 
     productFlavors {
-        nonRoot {
+        vrMode {
             externalNativeBuild {
                 ndkBuild {
-                    arguments "PRODUCT_FLAVOR=nonRoot"
+                    arguments "PRODUCT_FLAVOR=vrMode"
                 }
             }
 
