@@ -39,6 +39,11 @@ jobs:
           echo "VERSION_NAME=$VERSION_NAME" >> $GITHUB_OUTPUT
           echo "WORKFLOW_VERSION=$WORKFLOW_VERSION" >> $GITHUB_OUTPUT
 
+      - name: Prepare signing keystore
+        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' && secrets.ANDROID_KEYSTORE_PASSWORD != '' && secrets.ANDROID_KEY_ALIAS != '' && secrets.ANDROID_KEY_PASSWORD != '' }}
+        run: |
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > "$RUNNER_TEMP/moonlightvr-ci.keystore"
+
       - name: Build debug APK
         run: |
           GRADLE_OPTS=""
@@ -46,6 +51,14 @@ jobs:
           if [[ "$BRANCH_NAME" == "main" || "$BRANCH_NAME" == "refs/heads/main" || "$BRANCH_NAME" == main ]]; then
             GRADLE_OPTS="-PincludeX64"
           fi
+
+          if [[ -n "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" && -n "${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" && -n "${{ secrets.ANDROID_KEY_ALIAS }}" && -n "${{ secrets.ANDROID_KEY_PASSWORD }}" ]]; then
+            GRADLE_OPTS="$GRADLE_OPTS -PMOONLIGHTVR_STORE_FILE=$RUNNER_TEMP/moonlightvr-ci.keystore"
+            GRADLE_OPTS="$GRADLE_OPTS -PMOONLIGHTVR_STORE_PASSWORD=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}"
+            GRADLE_OPTS="$GRADLE_OPTS -PMOONLIGHTVR_KEY_ALIAS=${{ secrets.ANDROID_KEY_ALIAS }}"
+            GRADLE_OPTS="$GRADLE_OPTS -PMOONLIGHTVR_KEY_PASSWORD=${{ secrets.ANDROID_KEY_PASSWORD }}"
+          fi
+
           ./gradlew :app:assembleVrModeDebug $GRADLE_OPTS --no-daemon
 
       - name: Rename APK with metadata
