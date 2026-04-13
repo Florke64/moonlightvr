@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       flavor:
-        description: 'Product Flavor'
+        description: 'Flavor'
         required: true
         default: 'nonRoot'
         type: choice
@@ -22,7 +22,6 @@ on:
 
 jobs:
   build:
-    if: github.ref_name == 'vr' || github.ref_name == 'refs/heads/vr'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -33,11 +32,11 @@ jobs:
         with:
           ref: vr
 
-      - name: Set up JDK 25
+      - name: Set up JDK 21
         uses: actions/setup-java@v5
         with:
           distribution: 'temurin'
-          java-version: '25'
+          java-version: '21'
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
@@ -90,7 +89,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
           echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Branch | vr |" >> $GITHUB_STEP_SUMMARY
+          echo "| Branch | ${{ github.head_ref }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Flavor | ${{ github.event.inputs.flavor }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Build Type | ${{ github.event.inputs.build_type }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Commit | ${{ github.sha }} |" >> $GITHUB_STEP_SUMMARY
