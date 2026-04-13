@@ -337,14 +337,18 @@ public class VrControlServer extends NanoHTTPD {
             "window.addEventListener('resize', resize); resize();" +
             "let touches = {}; let initDist = null; let initRot = null; let lastTap = 0; let lastSend = 0;" +
 
-            "function throttledSend(payload) {" +
+            "const statusEl = document.getElementById('status');" +
+            "const setHealthy = () => { statusEl.style.background = '#4f4'; statusEl.style.boxShadow = '0 0 8px #4f4'; };" +
+            "const setUnhealthy = () => { statusEl.style.background = '#f44'; statusEl.style.boxShadow = '0 0 8px #f44'; };" +
+            "function sendGesture(payload) {" +
             "  let now = Date.now();" +
             "  if (now - lastSend > 33) {" +
-            "    fetch('/gesture', { method: 'POST', body: JSON.stringify(payload) }).catch(e=>console.error(e));" +
+            "    fetch('/gesture', { method: 'POST', body: JSON.stringify(payload) }).then(r => {" +
+            "      if(r.ok) setHealthy();" +
+            "    }).catch(() => setUnhealthy());" +
             "    lastSend = now;" +
             "  }" +
             "}" +
-
             "cvs.addEventListener('touchstart', e => {" +
             "  e.preventDefault();" +
             "  for(let t of e.changedTouches) touches[t.identifier] = { x: t.clientX, y: t.clientY };" +
@@ -355,10 +359,9 @@ public class VrControlServer extends NanoHTTPD {
             "  }" +
             "  if(vals.length === 1) {" +
             "    let now = Date.now();" +
-            "    if(now - lastTap < 300) { fetch('/gesture', { method: 'POST', body: JSON.stringify({type:'doubletap'}) }).catch(e=>{}); lastTap = 0; } else lastTap = now;" +
+            "    if(now - lastTap < 300) { sendGesture({type:'doubletap'}); lastTap = 0; } else lastTap = now;" +
             "  }" +
             "});" +
-
             "cvs.addEventListener('touchmove', e => {" +
             "  e.preventDefault();" +
             "  let active = e.touches;" +
@@ -366,7 +369,7 @@ public class VrControlServer extends NanoHTTPD {
             "    let t = active[0], old = touches[t.identifier];" +
             "    if(old) {" +
             "      let dy = t.clientY - old.y;" +
-            "      if(Math.abs(dy) > 2) throttledSend({ type: 'brightness', dy: -dy * 0.015 });" +
+            "      if(Math.abs(dy) > 2) sendGesture({ type: 'brightness', dy: -dy * 0.015 });" +
             "    }" +
             "    touches[t.identifier] = { x: t.clientX, y: t.clientY };" +
             "  } else if(active.length === 2) {" +
@@ -376,7 +379,7 @@ public class VrControlServer extends NanoHTTPD {
             "    if(initDist !== null && initRot !== null) {" +
             "      let dRot = rot - initRot;" +
             "      if(dRot > Math.PI) dRot -= Math.PI*2; if(dRot < -Math.PI) dRot += Math.PI*2;" +
-            "      throttledSend({ type: 'pinch_rotate', dScale: (initDist - dist)*0.005, rotation: dRot });" +
+            "      sendGesture({ type: 'pinch_rotate', dScale: (initDist - dist)*0.005, rotation: dRot });" +
             "    }" +
             "    initDist = dist; initRot = rot;" +
             "    touches[t1.identifier] = { x: t1.clientX, y: t1.clientY };" +
@@ -385,28 +388,19 @@ public class VrControlServer extends NanoHTTPD {
             "  ctx.clearRect(0,0,width,height); ctx.fillStyle = 'rgba(170,52,74,0.4)';" +
             "  for(let i=0; i<active.length; i++) { ctx.beginPath(); ctx.arc(active[i].clientX, active[i].clientY, 40, 0, Math.PI*2); ctx.fill(); }" +
             "});" +
-
             "cvs.addEventListener('touchend', e => {" +
             "  e.preventDefault(); for(let t of e.changedTouches) delete touches[t.identifier];" +
             "  if(Object.keys(touches).length < 2) { initDist = null; initRot = null; }" +
             "  ctx.clearRect(0,0,width,height);" +
             "});" +
-
-            "let lastGesture = 0;" +
-            "const statusEl = document.getElementById('status');" +
-            "const markHealthy = () => { lastGesture = Date.now(); statusEl.style.background = '#4f4'; statusEl.style.boxShadow = '0 0 8px #4f4'; };" +
-            "cvs.addEventListener('touchstart', () => markHealthy());" +
-            "cvs.addEventListener('touchmove', () => markHealthy());" +
             "setInterval(() => {" +
-            "  if (Date.now() - lastGesture > 1000) {" +
-            "    fetch('/ping').then(r => {" +
-            "      statusEl.style.background = '#4f4'; statusEl.style.boxShadow = '0 0 8px #4f4';" +
-            "      if (wakeLock === null) requestWakeLock();" +
-            "    }).catch(() => {" +
-            "      statusEl.style.background = '#f44'; statusEl.style.boxShadow = '0 0 8px #f44';" +
-            "      if (wakeLock !== null) { wakeLock.release(); wakeLock = null; }" +
-            "    });" +
-            "  } else { lastGesture = 0; }" +
+            "  fetch('/ping').then(r => {" +
+            "    setHealthy();" +
+            "    if (wakeLock === null) requestWakeLock();" +
+            "  }).catch(() => {" +
+            "    setUnhealthy();" +
+            "    if (wakeLock !== null) { wakeLock.release(); wakeLock = null; }" +
+            "  });" +
             "}, 1000);" +
 
             "let wakeLock = null;" +
