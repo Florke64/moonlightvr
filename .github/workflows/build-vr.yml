@@ -19,6 +19,11 @@ on:
         options:
           - release
           - debug
+  push:
+    branches:
+      - vr
+    tags:
+      - '*'
 
 jobs:
   build:
@@ -85,11 +90,13 @@ jobs:
 
       - name: Summary
         run: |
+          BRANCH_NAME="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}"
+          BRANCH_NAME="${BRANCH_NAME:-manual}"
           echo "## Build Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
           echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Branch | ${{ github.head_ref }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Branch | $BRANCH_NAME |" >> $GITHUB_STEP_SUMMARY
           echo "| Flavor | ${{ github.event.inputs.flavor }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Build Type | ${{ github.event.inputs.build_type }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Commit | ${{ github.sha }} |" >> $GITHUB_STEP_SUMMARY

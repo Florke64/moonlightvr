@@ -119,5 +119,7 @@ dependencies {
     implementation 'org.jmdns:jmdns:3.5.9'
     implementation 'com.github.cgutman:ShieldControllerExtensions:1.0.1'
     // Explicitly include the Cardboard SDK so its Java classes ship in the APK
-    implementation project(':cardboard-sdk')
+    implementation(project(':cardboard-sdk')) {
+        matchingFallbacks = ['release', 'debug']
+    }
 }
