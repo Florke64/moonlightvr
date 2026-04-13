@@ -265,6 +265,8 @@ public class Game extends Activity implements SurfaceHolder.Callback,
             loadVrLensPreferences();
             vrSurfaceView.setVisibility(View.VISIBLE);
             vrRenderer = new VrRenderer(this, vrSurfaceView, vrSurfaceListener);
+
+            // Setting VR Scene preferences
             vrRenderer.setScreenDistance(prefConfig.vrScreenDistanceMeters);
             vrRenderer.setScreenSize(prefConfig.vrScreenSizeMultiplier);
             vrRenderer.setCurvatureMode(prefConfig.vrCurvatureMode);
@@ -272,9 +274,12 @@ public class Game extends Activity implements SurfaceHolder.Callback,
             vrRenderer.setHorizontalCurvature(prefConfig.vrHorizontalCurvaturePercent);
             vrRenderer.setVerticalCurvature(prefConfig.vrVerticalCurvaturePercent);
             vrRenderer.setSkyboxEnabled(prefConfig.enableSkybox);
+
             vrSurfaceView.setEGLContextClientVersion(2);
+
             vrSurfaceView.setRenderer(vrRenderer);
             vrSurfaceView.setRenderMode(GLSurfaceView.RENDERMODE_CONTINUOUSLY);
+
             initVrLensControls();
 
             vrCameraManager = new VrCameraManager(this);
@@ -296,7 +301,7 @@ public class Game extends Activity implements SurfaceHolder.Callback,
                 });
             }
 
-            startVrControlService(vrRenderer);
+            startVrControlService();
         }
         else {
             // Go with legacy, classic stream mode
@@ -613,7 +618,7 @@ public class Game extends Activity implements SurfaceHolder.Callback,
             return;
         }
 
-        // The connection will be started when the surface gets created (only for flat screen)
+        // The connection will be started when the surface gets created (only for legacy mode)
         if (!this.vrMode) {
             streamView.getHolder().addCallback(this);
         }
@@ -1187,7 +1192,7 @@ public class Game extends Activity implements SurfaceHolder.Callback,
             if (prefConfig == null) {
                 prefConfig = PreferenceConfiguration.readPreferences(this);
             }
-            maybeStartVrCamera();
+            startVrCameraIfReady();
         }
     }
 
@@ -2833,7 +2838,7 @@ public class Game extends Activity implements SurfaceHolder.Callback,
                     return;
                 }
                 vrRenderSurface = surface;
-                maybeStartVrCamera();
+                startVrCameraIfReady();
                 startConnectionWithSurface(surface);
             }
         });
@@ -2996,24 +3001,24 @@ public class Game extends Activity implements SurfaceHolder.Callback,
         }
     }
 
-    private void startVrControlService(VrRenderer renderer) {
-        if (vrMode && prefConfig != null && prefConfig.enableVr) {
-            Intent intent = new Intent(this, VrControlService.class);
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                startForegroundService(intent);
-            } else {
-                startService(intent);
-            }
-            vrRenderer = renderer;
+    /**
+     * NanoHTTPD service start for VR scene remote touch gestures (via HTML canvas)
+     */
+    private void startVrControlService() {
+        if (this.vrMode && prefConfig != null && prefConfig.enableVr) {
+            // Start HTTPD
+            final Intent intent = new Intent(this, VrControlService.class);
+            startForegroundService(intent);
+
             if (!connectedToVrControlService) {
-                bindService(new Intent(this, VrControlService.class),
-                        vrControlServiceConnection, Service.BIND_AUTO_CREATE);
+                // Bind *:8555 port for WebUI VR Controls
+                bindService(intent, vrControlServiceConnection, Service.BIND_AUTO_CREATE);
             }
         }
     }
 
     private void stopVrControlService() {
-        Intent intent = new Intent(this, VrControlService.class);
+        final Intent intent = new Intent(this, VrControlService.class);
         intent.setAction("STOP");
         startService(intent);
     }
@@ -3045,7 +3050,7 @@ public class Game extends Activity implements SurfaceHolder.Callback,
         });
     }
 
-    private void maybeStartVrCamera() {
+    private void startVrCameraIfReady() {
         if (!vrMode || vrRenderer == null || vrCameraManager == null || vrRenderSurface == null) {
             return;
         }
@@ -3059,8 +3064,7 @@ public class Game extends Activity implements SurfaceHolder.Callback,
         if (vrCameraManager.isStarted()) {
             return;
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
-                checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+        if (checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(new String[]{Manifest.permission.CAMERA}, CAMERA_PERMISSION_REQ);
             return;
         }
@@ -3072,7 +3076,7 @@ public class Game extends Activity implements SurfaceHolder.Callback,
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode == CAMERA_PERMISSION_REQ) {
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                maybeStartVrCamera();
+                startVrCameraIfReady();
             } else {
                 LimeLog.warning("Camera permission denied");
             }
