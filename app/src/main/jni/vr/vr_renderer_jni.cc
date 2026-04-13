@@ -181,6 +181,27 @@ Java_com_limelight_vr_VrRenderer_nativeAdjustScreenRotation(JNIEnv*, jobject,
   FromHandle(handle)->AdjustScreenRotation(deltaRadians);
 }
 
+extern "C" JNIEXPORT void JNICALL
+Java_com_limelight_vr_VrRenderer_nativeSetLensScale(JNIEnv*, jobject,
+                                                     jlong handle,
+                                                     jfloat scale) {
+  FromHandle(handle)->SetLensScale(scale);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_limelight_vr_VrRenderer_nativeAdjustLeftLensOffset(JNIEnv*, jobject,
+                                                             jlong handle,
+                                                             jfloat deltaX) {
+  FromHandle(handle)->AdjustLeftLensOffset(deltaX);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_limelight_vr_VrRenderer_nativeAdjustRightLensOffset(JNIEnv*, jobject,
+                                                              jlong handle,
+                                                              jfloat deltaX) {
+  FromHandle(handle)->AdjustRightLensOffset(deltaX);
+}
+
 extern "C" JNIEXPORT jfloat JNICALL
 Java_com_limelight_vr_VrRenderer_nativeGetScreenSize(JNIEnv*, jobject, jlong handle) {
   return FromHandle(handle)->GetScreenSize();

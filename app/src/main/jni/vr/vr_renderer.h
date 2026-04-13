@@ -40,6 +40,9 @@ class VrMoonlightApp {
   void SetSkyboxEnabled(bool enabled);
   void SetSkyboxTexture(GLuint textureId);
   void SetSkyboxBrightness(float brightness);
+  void SetLensScale(float scale);
+  void AdjustLeftLensOffset(float deltaX);
+  void AdjustRightLensOffset(float deltaX);
   float GetCurvatureAmount() const;
   float GetHorizontalCurvature() const;
   float GetVerticalCurvature() const;
@@ -56,6 +59,8 @@ class VrMoonlightApp {
   void DestroyCardboardResources();
   void UpdateModelMatrix();
   void UpdateScreenGeometry();
+  void TransformLensMesh(std::vector<float>& vertices, float scale,
+                         float offset_x, bool is_left_eye);
 
   JavaVM* java_vm_;
   jobject activity_;
@@ -120,6 +125,10 @@ class VrMoonlightApp {
   float screen_yaw_radians_ = 0.0f;
   float screen_pitch_radians_ = 0.0f;
   float screen_rotation_radians_ = 0.0f;
+  float lens_scale_ = 1.0f;
+  float left_lens_offset_x_ = 0.0f;
+  float right_lens_offset_x_ = 0.0f;
+  bool lens_mesh_dirty_ = true;
 };
 
 }  // namespace moonlight_vr

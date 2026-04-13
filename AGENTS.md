@@ -14,6 +14,7 @@ This fork of the Moonlight Android client (**MoonlightVR**) adds native support 
   - `checkbox_quick_zoom` - Enable magnifying glass mode with auto-revert
   - Curvature settings (mode, amount, horizontal/vertical)
   - `checkbox_enable_skybox` - Toggle skybox background
+  - Lens scale and per-eye offset are now persisted along with a `checkbox_lock_vr_lenses` toggle that blocks accidental adjustments in VR mode.
 - **Native build:** Custom NDK module `vr_renderer` compiles Cardboard SDK sources (via `vendor/cardboard`) alongside the existing `moonlight-core` libs, linking against `libc++_shared` and `atomic`.
 
 ## Project Structure Notes
@@ -89,6 +90,7 @@ This fork of the Moonlight Android client (**MoonlightVR**) adds native support 
 - **Per-eye math:** `RenderVideoToTexture()` orchestrates per-eye view/projection matrices, draws the screen/skybox FBO pass, and manages depth state.
 - **Shaders:** `kVideo*`, `kLine*`, and `kSkybox*` shader strings near the top of `vr_renderer.cpp`; adjust these strings and the associated attribute/uniform lookups when changing shading behavior.
 - **Lifecycle/resource safety:** `VrRenderer` handles texture creation/release, context loss, and `surfaceListener` callbacks; extend it if you need to reinitialize additional GL resources during a context reset or add a custom `Skybox` loader.
+ - **Lens distortion customization:** `UpdateDeviceParams()` now tracks a mesh dirty flag so `TransformLensMesh()` can scale and clamp horizontal offsets per eye without rebuilding the Cardboard renderer, making zoom/pan gestures feel immediate.
 
 ## Debug Checklist
 - **GL shader compile/link logs:** `LoadGLShader()` logs shader compile failures; `VrMoonlightApp::OnSurfaceCreated()` now checks program link status and logs info logs.

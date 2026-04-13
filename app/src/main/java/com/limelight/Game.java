@@ -62,6 +62,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.IBinder;
+import android.preference.PreferenceManager;
 import android.util.Rational;
 import android.view.Display;
 import android.view.InputDevice;
@@ -69,6 +70,7 @@ import android.view.KeyCharacterMap;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.opengl.GLSurfaceView;
+import android.view.ScaleGestureDetector;
 import android.view.Surface;
 import android.view.SurfaceHolder;
 import android.view.View;
@@ -111,6 +113,9 @@ public class Game extends Activity implements SurfaceHolder.Callback,
     private static final int STYLUS_UP_DEAD_ZONE_RADIUS = 50;
 
     private static final int THREE_FINGER_TAP_THRESHOLD = 300;
+    private static final float MIN_LENS_SCALE = 0.5f;
+    private static final float MAX_LENS_SCALE = 3.0f;
+    private static final float LENS_MOVE_SCALE = 0.2f;
 
     private ControllerHandler controllerHandler;
     private KeyboardTranslator keyboardTranslator;
@@ -144,6 +149,16 @@ public class Game extends Activity implements SurfaceHolder.Callback,
     private GLSurfaceView vrSurfaceView;
     private VrRenderer vrRenderer;
     private Surface vrRenderSurface;
+    private ScaleGestureDetector vrLensScaleDetector;
+    private float lensScale = 1.0f;
+    private float leftLensOffsetX = 0.0f;
+    private float rightLensOffsetX = 0.0f;
+    private boolean lensLockEnabled = false;
+    private boolean lensDragActive = false;
+    private float lastLensTouchX = 0.0f;
+    private int activeLensSide = 0;
+    private static final int LENS_SIDE_LEFT = 1;
+    private static final int LENS_SIDE_RIGHT = 2;
     private final VrRenderer.SurfaceListener vrSurfaceListener = new VrRenderer.SurfaceListener() {
         @Override
         public void onSurfaceReady(Surface surface) {
@@ -243,10 +258,11 @@ public class Game extends Activity implements SurfaceHolder.Callback,
         prefConfig = PreferenceConfiguration.readPreferences(this);
         tombstonePrefs = Game.this.getSharedPreferences("DecoderTombstone", 0);
 
-vrMode = getIntent().getBooleanExtra(EXTRA_ENABLE_VR, false) ||
+            vrMode = getIntent().getBooleanExtra(EXTRA_ENABLE_VR, false) ||
                     (prefConfig != null && prefConfig.enableVr);
             vrSurfaceView = findViewById(R.id.vrSurfaceView);
             if (vrMode) {
+                loadVrLensPreferences();
                 vrSurfaceView.setVisibility(View.VISIBLE);
                 vrRenderer = new VrRenderer(this, vrSurfaceView, vrSurfaceListener);
                 vrRenderer.setScreenDistance(prefConfig.vrScreenDistanceMeters);
@@ -259,6 +275,7 @@ vrMode = getIntent().getBooleanExtra(EXTRA_ENABLE_VR, false) ||
                 vrSurfaceView.setEGLContextClientVersion(2);
                 vrSurfaceView.setRenderer(vrRenderer);
                 vrSurfaceView.setRenderMode(GLSurfaceView.RENDERMODE_CONTINUOUSLY);
+                initVrLensControls();
 
                 if (prefConfig.enableSkybox) {
                     final int[] panoramaResources = new int[] {
@@ -1163,6 +1180,7 @@ vrMode = getIntent().getBooleanExtra(EXTRA_ENABLE_VR, false) ||
 
         if (vrMode && vrRenderer != null) {
             vrRenderer.onResume();
+            refreshLensLockPreference();
         }
     }
 
@@ -2300,6 +2318,156 @@ vrMode = getIntent().getBooleanExtra(EXTRA_ENABLE_VR, false) ||
         }
 
         return handleMotionEvent(view, event);
+    }
+
+    private void loadVrLensPreferences() {
+        if (prefConfig != null) {
+            lensScale = prefConfig.vrLensScale;
+            leftLensOffsetX = prefConfig.vrLeftLensOffset;
+            rightLensOffsetX = prefConfig.vrRightLensOffset;
+            lensLockEnabled = prefConfig.lockVrLenses;
+            return;
+        }
+        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
+        lensScale = prefs.getFloat(PreferenceConfiguration.VR_LENS_SCALE_PREF_STRING,
+                PreferenceConfiguration.DEFAULT_VR_LENS_SCALE);
+        leftLensOffsetX = prefs.getFloat(PreferenceConfiguration.VR_LEFT_LENS_OFFSET_PREF_STRING, 0.0f);
+        rightLensOffsetX = prefs.getFloat(PreferenceConfiguration.VR_RIGHT_LENS_OFFSET_PREF_STRING, 0.0f);
+        lensLockEnabled = prefs.getBoolean(PreferenceConfiguration.VR_LENS_LOCK_PREF_STRING, false);
+    }
+
+    private void initVrLensControls() {
+        if (vrSurfaceView == null || vrRenderer == null) {
+            return;
+        }
+
+        vrLensScaleDetector = new ScaleGestureDetector(this, new ScaleGestureDetector.SimpleOnScaleGestureListener() {
+            @Override
+            public boolean onScale(ScaleGestureDetector detector) {
+                float factor = detector.getScaleFactor();
+                lensScale = Math.max(MIN_LENS_SCALE, Math.min(MAX_LENS_SCALE, lensScale * factor));
+                vrRenderer.setLensScale(lensScale);
+                return true;
+            }
+            @Override
+            public void onScaleEnd(ScaleGestureDetector detector) {
+                saveVrLensPreferences();
+            }
+        });
+
+        vrSurfaceView.setOnTouchListener(new View.OnTouchListener() {
+            @Override
+            public boolean onTouch(View view, MotionEvent motionEvent) {
+                return handleVrLensTouch(motionEvent);
+            }
+        });
+
+        vrRenderer.setLensScale(lensScale);
+        if (leftLensOffsetX != 0.0f) {
+            vrRenderer.adjustLeftLensOffset(leftLensOffsetX);
+        }
+        if (rightLensOffsetX != 0.0f) {
+            vrRenderer.adjustRightLensOffset(rightLensOffsetX);
+        }
+    }
+
+    private boolean handleVrLensTouch(MotionEvent event) {
+        if (vrRenderer == null || vrSurfaceView == null) {
+            return false;
+        }
+        if (lensLockEnabled) {
+            return true;
+        }
+
+        if (vrLensScaleDetector != null) {
+            vrLensScaleDetector.onTouchEvent(event);
+            if (vrLensScaleDetector.isInProgress()) {
+                return true;
+            }
+        }
+
+        switch (event.getActionMasked()) {
+            case MotionEvent.ACTION_DOWN:
+                if (event.getPointerCount() == 1) {
+                    lensDragActive = true;
+                    activeLensSide = determineLensSide(event.getX(0));
+                    lastLensTouchX = event.getX(0);
+                }
+                break;
+            case MotionEvent.ACTION_POINTER_DOWN:
+                lensDragActive = false;
+                activeLensSide = 0;
+                break;
+            case MotionEvent.ACTION_MOVE:
+                if (lensDragActive && event.getPointerCount() == 1 && activeLensSide != 0) {
+                    float currentX = event.getX(0);
+                    float dx = currentX - lastLensTouchX;
+                    lastLensTouchX = currentX;
+                    float width = vrSurfaceView.getWidth();
+                    if (width > 0) {
+                        float normalized = (dx / (width * 0.5f)) * LENS_MOVE_SCALE;
+                        if (activeLensSide == LENS_SIDE_LEFT) {
+                            leftLensOffsetX += normalized;
+                            vrRenderer.adjustLeftLensOffset(normalized);
+                        } else if (activeLensSide == LENS_SIDE_RIGHT) {
+                            rightLensOffsetX += normalized;
+                            vrRenderer.adjustRightLensOffset(normalized);
+                        }
+                    }
+                }
+                break;
+            case MotionEvent.ACTION_UP:
+            case MotionEvent.ACTION_POINTER_UP:
+            case MotionEvent.ACTION_CANCEL:
+                finalizeVrLensDrag();
+                break;
+            default:
+                break;
+        }
+
+        return true;
+    }
+
+    private void finalizeVrLensDrag() {
+        if (lensDragActive) {
+            lensDragActive = false;
+            activeLensSide = 0;
+            saveVrLensPreferences();
+        }
+    }
+
+    private int determineLensSide(float x) {
+        if (vrSurfaceView == null) {
+            return LENS_SIDE_LEFT;
+        }
+        float width = vrSurfaceView.getWidth();
+        if (width <= 0) {
+            return LENS_SIDE_LEFT;
+        }
+        return x < width * 0.5f ? LENS_SIDE_LEFT : LENS_SIDE_RIGHT;
+    }
+
+    private void saveVrLensPreferences() {
+        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
+        prefs.edit()
+                .putFloat(PreferenceConfiguration.VR_LENS_SCALE_PREF_STRING, lensScale)
+                .putFloat(PreferenceConfiguration.VR_LEFT_LENS_OFFSET_PREF_STRING, leftLensOffsetX)
+                .putFloat(PreferenceConfiguration.VR_RIGHT_LENS_OFFSET_PREF_STRING, rightLensOffsetX)
+                .apply();
+        if (prefConfig != null) {
+            prefConfig.vrLensScale = lensScale;
+            prefConfig.vrLeftLensOffset = leftLensOffsetX;
+            prefConfig.vrRightLensOffset = rightLensOffsetX;
+        }
+    }
+
+    private void refreshLensLockPreference() {
+        lensLockEnabled = PreferenceManager
+                .getDefaultSharedPreferences(this)
+                .getBoolean(PreferenceConfiguration.VR_LENS_LOCK_PREF_STRING, false);
+        if (prefConfig != null) {
+            prefConfig.lockVrLenses = lensLockEnabled;
+        }
     }
 
     @Override

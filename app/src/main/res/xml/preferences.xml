@@ -57,6 +57,11 @@
             android:title="@string/title_checkbox_quick_zoom"
             android:summary="@string/summary_checkbox_quick_zoom"
             android:defaultValue="false" />
+        <CheckBoxPreference
+            android:key="checkbox_lock_vr_lenses"
+            android:title="@string/title_checkbox_lock_vr_lenses"
+            android:summary="@string/summary_checkbox_lock_vr_lenses"
+            android:defaultValue="false" />
         <com.limelight.preferences.SeekBarPreference
             android:key="seekbar_vr_screen_distance"
             android:dialogMessage="@string/summary_seekbar_vr_screen_distance"

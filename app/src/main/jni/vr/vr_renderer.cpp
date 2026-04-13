@@ -31,6 +31,8 @@ constexpr float kScreenAspectRatio = 16.0f / 9.0f;
 constexpr float kMinScreenDistanceMeters = 1.0f;
 constexpr float kMaxScreenDistanceMeters = 4.0f;
 constexpr float kDefaultScreenDistanceMeters = 2.0f;
+constexpr float kMinLensScale = 0.5f;
+constexpr float kMaxLensScale = 3.0f;
 
 constexpr int kEyeCount = 2;
 
@@ -525,57 +527,121 @@ void VrMoonlightApp::UpdateRenderTarget() {
 }
 
 bool VrMoonlightApp::UpdateDeviceParams() {
-  if (!screen_params_changed_ && !device_params_changed_) {
-    return true;
-  }
+  bool hardware_recreated = false;
 
-  uint8_t* params = nullptr;
-  int size = 0;
-  CardboardQrCode_getSavedDeviceParams(&params, &size);
-  bool free_params = false;
-  if (size == 0) {
-    CardboardQrCode_getCardboardV1DeviceParams(&params, &size);
-  } else {
-    free_params = true;
-  }
+  if (screen_params_changed_ || device_params_changed_) {
+    uint8_t* params = nullptr;
+    int size = 0;
+    CardboardQrCode_getSavedDeviceParams(&params, &size);
+    bool free_params = false;
+    if (size == 0) {
+      CardboardQrCode_getCardboardV1DeviceParams(&params, &size);
+    } else {
+      free_params = true;
+    }
 
-  if (screen_width_ == 0 || screen_height_ == 0 || size == 0) {
+    if (screen_width_ == 0 || screen_height_ == 0 || size == 0) {
+      if (free_params && params != nullptr) {
+        CardboardQrCode_destroy(params);
+      }
+      return false;
+    }
+
+    if (lens_distortion_ != nullptr) {
+      CardboardLensDistortion_destroy(lens_distortion_);
+      lens_distortion_ = nullptr;
+    }
+    lens_distortion_ = CardboardLensDistortion_create(params, size, screen_width_,
+                                                      screen_height_);
     if (free_params && params != nullptr) {
       CardboardQrCode_destroy(params);
     }
-    return false;
+    if (lens_distortion_ == nullptr) {
+      return false;
+    }
+
+    if (distortion_renderer_ != nullptr) {
+      CardboardDistortionRenderer_destroy(distortion_renderer_);
+      distortion_renderer_ = nullptr;
+    }
+    CardboardOpenGlEsDistortionRendererConfig config{kGlTexture2D};
+    distortion_renderer_ = CardboardOpenGlEs2DistortionRenderer_create(&config);
+    if (distortion_renderer_ == nullptr) {
+      return false;
+    }
+
+    screen_params_changed_ = false;
+    device_params_changed_ = false;
+    hardware_recreated = true;
   }
 
-  if (lens_distortion_ != nullptr) {
-    CardboardLensDistortion_destroy(lens_distortion_);
-    lens_distortion_ = nullptr;
-  }
-  lens_distortion_ = CardboardLensDistortion_create(params, size, screen_width_,
-                                                   screen_height_);
-  if (free_params && params != nullptr) {
-    CardboardQrCode_destroy(params);
-  }
-  if (lens_distortion_ == nullptr) {
-    return false;
+  if (hardware_recreated || lens_mesh_dirty_) {
+    if (lens_distortion_ == nullptr || distortion_renderer_ == nullptr) {
+      return false;
+    }
+
+    CardboardMesh left_mesh;
+    CardboardMesh right_mesh;
+    CardboardLensDistortion_getDistortionMesh(lens_distortion_, kLeft, &left_mesh);
+    CardboardLensDistortion_getDistortionMesh(lens_distortion_, kRight, &right_mesh);
+
+    std::vector<float> custom_left(left_mesh.vertices,
+                                   left_mesh.vertices + left_mesh.n_vertices * 2);
+    std::vector<float> custom_right(right_mesh.vertices,
+                                    right_mesh.vertices + right_mesh.n_vertices * 2);
+
+    TransformLensMesh(custom_left, lens_scale_, left_lens_offset_x_, true);
+    TransformLensMesh(custom_right, lens_scale_, right_lens_offset_x_, false);
+
+    left_mesh.vertices = custom_left.data();
+    right_mesh.vertices = custom_right.data();
+
+    CardboardDistortionRenderer_setMesh(distortion_renderer_, &left_mesh, kLeft);
+    CardboardDistortionRenderer_setMesh(distortion_renderer_, &right_mesh, kRight);
+
+    lens_mesh_dirty_ = false;
   }
 
-  if (distortion_renderer_ != nullptr) {
-    CardboardDistortionRenderer_destroy(distortion_renderer_);
-    distortion_renderer_ = nullptr;
-  }
-  CardboardOpenGlEsDistortionRendererConfig config{kGlTexture2D};
-  distortion_renderer_ = CardboardOpenGlEs2DistortionRenderer_create(&config);
-
-  CardboardMesh left_mesh;
-  CardboardMesh right_mesh;
-  CardboardLensDistortion_getDistortionMesh(lens_distortion_, kLeft, &left_mesh);
-  CardboardLensDistortion_getDistortionMesh(lens_distortion_, kRight, &right_mesh);
-  CardboardDistortionRenderer_setMesh(distortion_renderer_, &left_mesh, kLeft);
-  CardboardDistortionRenderer_setMesh(distortion_renderer_, &right_mesh, kRight);
-
-  screen_params_changed_ = false;
-  device_params_changed_ = false;
   return true;
+}
+
+void VrMoonlightApp::TransformLensMesh(std::vector<float>& vertices, float scale,
+                                       float offset_x, bool is_left_eye) {
+  if (vertices.empty()) {
+    return;
+  }
+
+  float min_x = vertices[0];
+  float max_x = vertices[0];
+  float min_y = vertices[1];
+  float max_y = vertices[1];
+
+  for (size_t i = 0; i + 1 < vertices.size(); i += 2) {
+    min_x = std::min(min_x, vertices[i]);
+    max_x = std::max(max_x, vertices[i]);
+    min_y = std::min(min_y, vertices[i + 1]);
+    max_y = std::max(max_y, vertices[i + 1]);
+  }
+
+  const float c_x = (min_x + max_x) * 0.5f;
+  const float c_y = (min_y + max_y) * 0.5f;
+
+  const float scaled_min_x = c_x + (min_x - c_x) * scale;
+  const float scaled_max_x = c_x + (max_x - c_x) * scale;
+
+  const float half_min = is_left_eye ? -1.0f : 0.0f;
+  const float half_max = is_left_eye ? 0.0f : 1.0f;
+
+  const float tx_min = half_min - scaled_min_x;
+  const float tx_max = half_max - scaled_max_x;
+  const float safe_tx_min = std::min(tx_min, tx_max);
+  const float safe_tx_max = std::max(tx_min, tx_max);
+  const float safe_offset_x = std::clamp(offset_x, safe_tx_min, safe_tx_max);
+
+  for (size_t i = 0; i + 1 < vertices.size(); i += 2) {
+    vertices[i] = c_x + (vertices[i] - c_x) * scale + safe_offset_x;
+    vertices[i + 1] = c_y + (vertices[i + 1] - c_y) * scale;
+  }
 }
 
 void VrMoonlightApp::RenderVideoToTexture(
@@ -854,6 +920,21 @@ void VrMoonlightApp::SetSkyboxTexture(GLuint textureId) {
 
 void VrMoonlightApp::SetSkyboxBrightness(float brightness) {
   skybox_brightness_ = std::max(0.0f, std::min(1.0f, brightness));
+}
+
+void VrMoonlightApp::SetLensScale(float scale) {
+  lens_scale_ = std::clamp(scale, kMinLensScale, kMaxLensScale);
+  lens_mesh_dirty_ = true;
+}
+
+void VrMoonlightApp::AdjustLeftLensOffset(float delta_x) {
+  left_lens_offset_x_ += delta_x;
+  lens_mesh_dirty_ = true;
+}
+
+void VrMoonlightApp::AdjustRightLensOffset(float delta_x) {
+  right_lens_offset_x_ += delta_x;
+  lens_mesh_dirty_ = true;
 }
  
 void VrMoonlightApp::UpdateModelMatrix() {

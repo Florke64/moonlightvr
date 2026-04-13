@@ -173,6 +173,18 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
         nativeRecenterView(nativeHandle);
     }
 
+    public void setLensScale(float scale) {
+        nativeSetLensScale(nativeHandle, scale);
+    }
+
+    public void adjustLeftLensOffset(float deltaX) {
+        nativeAdjustLeftLensOffset(nativeHandle, deltaX);
+    }
+
+    public void adjustRightLensOffset(float deltaX) {
+        nativeAdjustRightLensOffset(nativeHandle, deltaX);
+    }
+
     public void setCurvatureMode(int mode) {
         nativeSetCurvatureMode(nativeHandle, mode);
     }
@@ -380,6 +392,9 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
     private native void nativeAdjustScreenPosition(long handle, float deltaX, float deltaY);
     private native void nativeAdjustScreenRotation(long handle, float deltaRadians);
     private native void nativeRecenterView(long handle);
+    private native void nativeSetLensScale(long handle, float scale);
+    private native void nativeAdjustLeftLensOffset(long handle, float deltaX);
+    private native void nativeAdjustRightLensOffset(long handle, float deltaX);
     private native void nativeSetCurvatureMode(long handle, int mode);
     private native void nativeSetCurvatureAmount(long handle, float percent);
     private native void nativeSetHorizontalCurvature(long handle, float percent);

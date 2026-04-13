@@ -76,6 +76,11 @@ public class PreferenceConfiguration {
     private static final String VR_CURVATURE_AMOUNT_PREF_STRING = "seekbar_vr_curvature_amount";
     private static final String VR_HORIZONTAL_CURVATURE_PREF_STRING = "seekbar_vr_horizontal_curvature";
     private static final String VR_VERTICAL_CURVATURE_PREF_STRING = "seekbar_vr_vertical_curvature";
+    public static final String VR_LENS_SCALE_PREF_STRING = "vr_lens_scale";
+    public static final String VR_LEFT_LENS_OFFSET_PREF_STRING = "vr_left_lens_offset_x";
+    public static final String VR_RIGHT_LENS_OFFSET_PREF_STRING = "vr_right_lens_offset_x";
+    public static final String VR_LENS_LOCK_PREF_STRING = "checkbox_lock_vr_lenses";
+    public static final float DEFAULT_VR_LENS_SCALE = 1.0f;
 
     static final String DEFAULT_RESOLUTION = "1280x720";
     static final String DEFAULT_FPS = "60";
@@ -182,6 +187,10 @@ public class PreferenceConfiguration {
     public float vrCurvatureAmountPercent;
     public float vrHorizontalCurvaturePercent;
     public float vrVerticalCurvaturePercent;
+    public float vrLensScale;
+    public float vrLeftLensOffset;
+    public float vrRightLensOffset;
+    public boolean lockVrLenses;
 
     public static boolean isNativeResolution(int width, int height) {
         // It's not a native resolution if it matches an existing resolution option
@@ -629,6 +638,10 @@ public class PreferenceConfiguration {
         config.vrCurvatureAmountPercent = prefs.getInt(VR_CURVATURE_AMOUNT_PREF_STRING, DEFAULT_VR_CURVATURE_AMOUNT_INT);
         config.vrHorizontalCurvaturePercent = prefs.getInt(VR_HORIZONTAL_CURVATURE_PREF_STRING, DEFAULT_VR_HORIZONTAL_CURVATURE_INT);
         config.vrVerticalCurvaturePercent = prefs.getInt(VR_VERTICAL_CURVATURE_PREF_STRING, DEFAULT_VR_VERTICAL_CURVATURE_INT);
+        config.vrLensScale = prefs.getFloat(VR_LENS_SCALE_PREF_STRING, DEFAULT_VR_LENS_SCALE);
+        config.vrLeftLensOffset = prefs.getFloat(VR_LEFT_LENS_OFFSET_PREF_STRING, 0.0f);
+        config.vrRightLensOffset = prefs.getFloat(VR_RIGHT_LENS_OFFSET_PREF_STRING, 0.0f);
+        config.lockVrLenses = prefs.getBoolean(VR_LENS_LOCK_PREF_STRING, false);
         config.enablePip = prefs.getBoolean(ENABLE_PIP_PREF_STRING, DEFAULT_ENABLE_PIP);
         config.enablePerfOverlay = prefs.getBoolean(ENABLE_PERF_OVERLAY_STRING, DEFAULT_ENABLE_PERF_OVERLAY);
         config.bindAllUsb = prefs.getBoolean(BIND_ALL_USB_STRING, DEFAULT_BIND_ALL_USB);
