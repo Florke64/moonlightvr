@@ -1,4 +1,4 @@
-name: Build VR fork (test)
+name: Build MoonlightVR
 
 on:
   workflow_dispatch:
@@ -39,7 +39,7 @@ jobs:
           echo "VERSION_NAME=$VERSION_NAME" >> $GITHUB_OUTPUT
           echo "WORKFLOW_VERSION=$WORKFLOW_VERSION" >> $GITHUB_OUTPUT
 
-      - name: Build production APK
+      - name: Build debug APK
         run: |
           GRADLE_OPTS=""
           BRANCH_NAME="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}"

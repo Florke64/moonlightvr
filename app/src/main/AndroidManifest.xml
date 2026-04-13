@@ -55,6 +55,7 @@
         android:required="false"/>
 
     <application
+        android:label="@string/app_label"
         android:allowBackup="true"
         android:fullBackupContent="@xml/backup_rules"
         android:dataExtractionRules="@xml/backup_rules_s"
