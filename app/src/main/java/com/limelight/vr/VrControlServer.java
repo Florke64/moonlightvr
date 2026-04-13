@@ -33,6 +33,7 @@ import java.security.cert.Certificate;
 import java.security.cert.X509Certificate;
 import java.util.Calendar;
 import java.util.Date;
+import java.util.List;
 import java.util.Map;
 import java.util.Timer;
 import java.util.TimerTask;
@@ -58,6 +59,7 @@ public class VrControlServer extends NanoHTTPD {
     private float animStartSize;
     private float animTargetSize;
     private long animStartTime;
+    private float currentBrightness = 1.0f;
 
     public VrControlServer(Context context) throws Exception {
         super(DEFAULT_PORT);
@@ -154,6 +156,19 @@ public class VrControlServer extends NanoHTTPD {
                 return newFixedLengthResponse(Response.Status.OK, "application/json", "{\"status\":\"ok\"}");
             }
             return newFixedLengthResponse(Response.Status.SERVICE_UNAVAILABLE, "application/json", "{\"error\":\"no renderer\"}");
+        } else if (uri.equals("/brightness")) {
+            if (vrRenderer != null) {
+                List<String> q = session.getParameters().get("v");
+                if (q != null && !q.isEmpty()) {
+                    try {
+                        float val = Float.parseFloat(q.get(0));
+                        currentBrightness = Math.max(0.0f, Math.min(1.0f, val));
+                        vrRenderer.setSkyboxBrightness(currentBrightness);
+                    } catch (NumberFormatException e) {}
+                }
+                return newFixedLengthResponse(Response.Status.OK, "application/json", "{\"brightness\":" + currentBrightness + "}");
+            }
+            return newFixedLengthResponse(Response.Status.SERVICE_UNAVAILABLE, "application/json", "{\"error\":\"no renderer\"}");
         } else if (uri.equals("/ping")) {
             return newFixedLengthResponse(Response.Status.OK, "application/json", "{\"status\":\"pong\",\"ts\":" + System.currentTimeMillis() + "}");
         } else if (uri.equals("/gesture") && Method.POST.equals(session.getMethod())) {
@@ -203,6 +218,10 @@ public class VrControlServer extends NanoHTTPD {
                         }
                         resetToPreferenceSettings();
                         vrRenderer.recenterView();
+                    } else if ("brightness".equals(type)) {
+                        float dy = (float) obj.optDouble("dy", 0.0);
+                        currentBrightness = Math.max(0.0f, Math.min(1.0f, currentBrightness + dy));
+                        vrRenderer.setSkyboxBrightness(currentBrightness);
                     }
                 }
                 return newFixedLengthResponse(Response.Status.OK, "application/json", "{\"status\":\"ok\"}");
@@ -306,7 +325,7 @@ public class VrControlServer extends NanoHTTPD {
             "#status { position: absolute; bottom: 20px; right: 20px; width: 16px; height: 16px; border-radius: 50%; background: #f44; box-shadow: 0 0 8px #f44; }" +
             "</style></head><body>" +
             "<div id=\"hud\"><strong>MoonlightVR Gestures</strong><br>" +
-            "2 Fingers: Pinch to Zoom<br>2 Fingers: Rotate<br>Double Tap: Recenter</div>" +
+            "1 Finger: Brightness (up/down)<br>2 Fingers: Pinch to Zoom<br>2 Fingers: Rotate<br>Double Tap: Recenter</div>" +
             "<div id=\"menu\"><a href=\"/buttons.html\">Buttons</a></div>" +
             "<div id=\"status\"></div>" +
             "<canvas id=\"canvas\"></canvas>" +
@@ -345,6 +364,10 @@ public class VrControlServer extends NanoHTTPD {
             "  let active = e.touches;" +
             "  if(active.length === 1) {" +
             "    let t = active[0], old = touches[t.identifier];" +
+            "    if(old) {" +
+            "      let dy = t.clientY - old.y;" +
+            "      if(Math.abs(dy) > 2) throttledSend({ type: 'brightness', dy: -dy * 0.015 });" +
+            "    }" +
             "    touches[t.identifier] = { x: t.clientX, y: t.clientY };" +
             "  } else if(active.length === 2) {" +
             "    let t1 = active[0], t2 = active[1];" +

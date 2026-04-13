@@ -193,6 +193,10 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
         nativeSetSkyboxEnabled(nativeHandle, enabled);
     }
 
+    public void setSkyboxBrightness(float brightness) {
+        nativeSetSkyboxBrightness(nativeHandle, brightness);
+    }
+
     public void loadSkyboxCubemap(Resources resources, int[] resourceIds) {
         if (resourceIds == null || resourceIds.length != 6) {
             LimeLog.warning("loadSkyboxCubemap: expected 6 resource IDs, got " + (resourceIds != null ? resourceIds.length : 0));
@@ -231,13 +235,18 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
             GLES20.GL_TEXTURE_CUBE_MAP_NEGATIVE_Z
         };
 
+        // Panorama order is based on Minecraft's 6-image panorama strip layout.
+        // Minecraft provides images in order: right, left, up, down, front, back.
+        // These must be mapped to OpenGL cubemap faces: +X, -X, +Y, -Y, +Z, -Z.
+        // See: https://minecraft.wiki/w/Panorama
+        // DO NOT change this mapping without understanding Minecraft's panorama format.
         int[] panoramaToFaceMap = {
-            1,
-            3,
-            4,
-            5,
-            0,
-            2
+            1,  // panorama_1 -> +X (right)
+            3,  // panorama_3 -> -X (left)
+            4,  // panorama_4 -> +Y (up)
+            5,  // panorama_5 -> -Y (down)
+            0,  // panorama_0 -> +Z (front)
+            2   // panorama_2 -> -Z (back)
         };
 
         BitmapFactory.Options options = new BitmapFactory.Options();
@@ -250,6 +259,7 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
             try {
                 bitmap = BitmapFactory.decodeResource(resources, resourceIds[resourceIndex], options);
                 if (bitmap != null) {
+                    bitmap = sanitizeCubemapBorder(bitmap, i);
                     GLUtils.texImage2D(cubeMapTargets[i], 0, bitmap, 0);
                     int glError = GLES20.glGetError();
                     if (glError != GLES20.GL_NO_ERROR) {
@@ -300,6 +310,61 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
         return nativeGetScreenSize(nativeHandle);
     }
 
+    private Bitmap sanitizeCubemapBorder(Bitmap bitmap, int faceIndex) {
+        if (bitmap == null || bitmap.getConfig() == Bitmap.Config.RGB_565) {
+            return bitmap;
+        }
+
+        int width = bitmap.getWidth();
+        int height = bitmap.getHeight();
+        if (width < 2 || height < 2) {
+            return bitmap;
+        }
+
+        boolean hasTransparentBorder = false;
+        for (int x = 0; x < width && !hasTransparentBorder; x++) {
+            if (((bitmap.getPixel(x, 0) >>> 24) == 0) || ((bitmap.getPixel(x, height - 1) >>> 24) == 0)) {
+                hasTransparentBorder = true;
+            }
+        }
+        for (int y = 0; y < height && !hasTransparentBorder; y++) {
+            if (((bitmap.getPixel(0, y) >>> 24) == 0) || ((bitmap.getPixel(width - 1, y) >>> 24) == 0)) {
+                hasTransparentBorder = true;
+            }
+        }
+
+        if (!hasTransparentBorder) {
+            return bitmap;
+        }
+
+        Bitmap sanitized = bitmap.copy(Bitmap.Config.ARGB_8888, true);
+        if (sanitized == null) {
+            return bitmap;
+        }
+
+        for (int x = 0; x < width; x++) {
+            if ((sanitized.getPixel(x, 0) >>> 24) == 0) {
+                sanitized.setPixel(x, 0, sanitized.getPixel(x, 1));
+            }
+            if ((sanitized.getPixel(x, height - 1) >>> 24) == 0) {
+                sanitized.setPixel(x, height - 1, sanitized.getPixel(x, height - 2));
+            }
+        }
+
+        for (int y = 0; y < height; y++) {
+            if ((sanitized.getPixel(0, y) >>> 24) == 0) {
+                sanitized.setPixel(0, y, sanitized.getPixel(1, y));
+            }
+            if ((sanitized.getPixel(width - 1, y) >>> 24) == 0) {
+                sanitized.setPixel(width - 1, y, sanitized.getPixel(width - 2, y));
+            }
+        }
+
+        LimeLog.warning("loadSkyboxCubemap: fixed transparent edge pixels on face " + faceIndex);
+        bitmap.recycle();
+        return sanitized;
+    }
+
     private native long nativeCreate(Context context, AssetManager assetManager);
     private native void nativeDestroy(long handle);
     private native int nativeOnSurfaceCreated(long handle);
@@ -321,6 +386,7 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
     private native void nativeSetVerticalCurvature(long handle, float percent);
     private native void nativeSetSkyboxEnabled(long handle, boolean enabled);
     private native void nativeSetSkyboxTexture(long handle, int textureId);
+    private native void nativeSetSkyboxBrightness(long handle, float brightness);
     private native float nativeGetCurvatureAmount(long handle);
     private native float nativeGetHorizontalCurvature(long handle);
     private native float nativeGetVerticalCurvature(long handle);

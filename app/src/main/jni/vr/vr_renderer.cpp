@@ -107,9 +107,12 @@ const char kSkyboxFragmentShader[] =
     "precision mediump float;"                               "\n"
     "varying vec3 v_TexCoord;"                               "\n"
     "uniform samplerCube u_SkyboxTexture;"                   "\n"
+    "uniform float u_Brightness;"                            "\n"
     "void main() {"                                          "\n"
     "  vec3 dir = normalize(v_TexCoord);"                    "\n"
-    "  gl_FragColor = textureCube(u_SkyboxTexture, dir);"    "\n"
+    "  vec4 color = textureCube(u_SkyboxTexture, dir);"      "\n"
+    "  float brightness = clamp(u_Brightness, 0.0, 1.0);"    "\n"
+    "  gl_FragColor = vec4(color.rgb * brightness, color.a);" "\n"
     "}";
 
 const GLfloat kSkyboxVertices[] = {
@@ -305,6 +308,7 @@ jint VrMoonlightApp::OnSurfaceCreated(JNIEnv* env) {
       skybox_pos_attrib_ = glGetAttribLocation(skybox_program_, "a_Position");
       skybox_vp_uniform_ = glGetUniformLocation(skybox_program_, "u_VP");
       skybox_sampler_uniform_ = glGetUniformLocation(skybox_program_, "u_SkyboxTexture");
+      skybox_brightness_uniform_ = glGetUniformLocation(skybox_program_, "u_Brightness");
     }
   }
 
@@ -662,6 +666,7 @@ void VrMoonlightApp::RenderVideoToTexture(
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_CUBE_MAP, skybox_texture_);
     glUniform1i(skybox_sampler_uniform_, 0);
+    glUniform1f(skybox_brightness_uniform_, skybox_brightness_);
     glEnableVertexAttribArray(skybox_pos_attrib_);
     glVertexAttribPointer(skybox_pos_attrib_, 3, GL_FLOAT, GL_FALSE, 0,
                           kSkyboxVertices);
@@ -845,6 +850,10 @@ void VrMoonlightApp::SetSkyboxEnabled(bool enabled) {
 
 void VrMoonlightApp::SetSkyboxTexture(GLuint textureId) {
   skybox_texture_ = textureId;
+}
+
+void VrMoonlightApp::SetSkyboxBrightness(float brightness) {
+  skybox_brightness_ = std::max(0.0f, std::min(1.0f, brightness));
 }
  
 void VrMoonlightApp::UpdateModelMatrix() {

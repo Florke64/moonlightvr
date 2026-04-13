@@ -120,6 +120,13 @@ Java_com_limelight_vr_VrRenderer_nativeSetSkyboxTexture(JNIEnv*, jobject,
                                                          jint textureId) {
   FromHandle(handle)->SetSkyboxTexture(textureId);
 }
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_limelight_vr_VrRenderer_nativeSetSkyboxBrightness(JNIEnv*, jobject,
+                                                           jlong handle,
+                                                           jfloat brightness) {
+  FromHandle(handle)->SetSkyboxBrightness(brightness);
+}
  
 extern "C" JNIEXPORT jfloat JNICALL
 Java_com_limelight_vr_VrRenderer_nativeGetCurvatureAmount(JNIEnv*, jobject,
