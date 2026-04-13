@@ -23,7 +23,6 @@ import com.limelight.nvstream.StreamConfiguration;
 import com.limelight.nvstream.http.ComputerDetails;
 import com.limelight.nvstream.http.NvApp;
 import com.limelight.nvstream.http.NvHTTP;
-import com.limelight.nvstream.input.ControllerPacket;
 import com.limelight.nvstream.input.KeyboardPacket;
 import com.limelight.nvstream.input.MouseButtonPacket;
 import com.limelight.nvstream.jni.MoonBridge;
@@ -64,7 +63,6 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.IBinder;
-import android.preference.PreferenceManager;
 import android.util.Rational;
 import android.view.Display;
 import android.view.InputDevice;
@@ -226,7 +224,6 @@ public class Game extends Activity implements SurfaceHolder.Callback,
     public static final String EXTRA_PC_NAME = "PcName";
     public static final String EXTRA_APP_HDR = "HDR";
     public static final String EXTRA_SERVER_CERT = "ServerCert";
-    public static final String EXTRA_ENABLE_VR = "EnableVr";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -259,13 +256,12 @@ public class Game extends Activity implements SurfaceHolder.Callback,
         setContentView(R.layout.activity_game);
 
         // Read the stream preferences early for VR mode check
-        prefConfig = PreferenceConfiguration.readPreferences(this);
-        tombstonePrefs = Game.this.getSharedPreferences("DecoderTombstone", 0);
-        vrSurfaceView = findViewById(R.id.vrSurfaceView);
+        this.prefConfig = PreferenceConfiguration.readPreferences(this);
+        this.tombstonePrefs = this.getSharedPreferences("DecoderTombstone", 0);
+        this.vrSurfaceView = findViewById(R.id.vrSurfaceView);
+        this.vrMode = prefConfig != null && prefConfig.enableVr;
 
-        vrMode = getIntent().getBooleanExtra(EXTRA_ENABLE_VR, false) ||
-                (prefConfig != null && prefConfig.enableVr);
-        if (vrMode) {
+        if (this.vrMode) {
             loadVrLensPreferences();
             vrSurfaceView.setVisibility(View.VISIBLE);
             vrRenderer = new VrRenderer(this, vrSurfaceView, vrSurfaceListener);
@@ -295,7 +291,7 @@ public class Game extends Activity implements SurfaceHolder.Callback,
                 vrSurfaceView.queueEvent(new Runnable() {
                     @Override
                     public void run() {
-                        vrRenderer.loadSkyboxCubemap(getResources(), panoramaResources);
+                        Game.this.vrRenderer.loadSkyboxCubemap(getResources(), panoramaResources);
                     }
                 });
             }
@@ -303,6 +299,7 @@ public class Game extends Activity implements SurfaceHolder.Callback,
             startVrControlService(vrRenderer);
         }
         else {
+            // Go with legacy, classic stream mode
             vrSurfaceView.setVisibility(View.GONE);
         }
 
@@ -366,14 +363,12 @@ public class Game extends Activity implements SurfaceHolder.Callback,
 
         inputCaptureProvider = InputCaptureManager.getInputCaptureProvider(this, this);
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            streamView.setOnCapturedPointerListener(new View.OnCapturedPointerListener() {
-                @Override
-                public boolean onCapturedPointer(View view, MotionEvent motionEvent) {
-                    return handleMotionEvent(view, motionEvent);
-                }
-            });
-        }
+        streamView.setOnCapturedPointerListener(new View.OnCapturedPointerListener() {
+            @Override
+            public boolean onCapturedPointer(View view, MotionEvent motionEvent) {
+                return handleMotionEvent(view, motionEvent);
+            }
+        });
 
         // Warn the user if they're on a metered connection
         ConnectivityManager connMgr = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
@@ -435,28 +430,23 @@ public class Game extends Activity implements SurfaceHolder.Callback,
         boolean willStreamHdr = false;
         if (prefConfig.enableHdr) {
             // Start our HDR checklist
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                Display display = getWindowManager().getDefaultDisplay();
-                Display.HdrCapabilities hdrCaps = display.getHdrCapabilities();
+            Display display = getWindowManager().getDefaultDisplay();
+            Display.HdrCapabilities hdrCaps = display.getHdrCapabilities();
 
-                // We must now ensure our display is compatible with HDR10
-                if (hdrCaps != null) {
-                    // getHdrCapabilities() returns null on Lenovo Lenovo Mirage Solo (vega), Android 8.0
-                    for (int hdrType : hdrCaps.getSupportedHdrTypes()) {
-                        if (hdrType == Display.HdrCapabilities.HDR_TYPE_HDR10) {
-                            willStreamHdr = true;
-                            break;
-                        }
+            // We must now ensure our display is compatible with HDR10
+            if (hdrCaps != null) {
+                // getHdrCapabilities() returns null on Lenovo Lenovo Mirage Solo (vega), Android 8.0
+                for (int hdrType : hdrCaps.getSupportedHdrTypes()) {
+                    if (hdrType == Display.HdrCapabilities.HDR_TYPE_HDR10) {
+                        willStreamHdr = true;
+                        break;
                     }
                 }
-
-                if (!willStreamHdr) {
-                    // Nope, no HDR for us :(
-                    Toast.makeText(this, "Display does not support HDR10", Toast.LENGTH_LONG).show();
-                }
             }
-            else {
-                Toast.makeText(this, "HDR requires Android 7.0 or later", Toast.LENGTH_LONG).show();
+
+            if (!willStreamHdr) {
+                // Nope, no HDR for us :(
+                Toast.makeText(this, "Display does not support HDR10", Toast.LENGTH_LONG).show();
             }
         }
 
@@ -624,7 +614,7 @@ public class Game extends Activity implements SurfaceHolder.Callback,
         }
 
         // The connection will be started when the surface gets created (only for flat screen)
-        if (!vrMode) {
+        if (!this.vrMode) {
             streamView.getHolder().addCallback(this);
         }
     }
@@ -1146,7 +1136,7 @@ public class Game extends Activity implements SurfaceHolder.Callback,
         // Destroy the capture provider
         inputCaptureProvider.destroy();
 
-        if (vrMode) {
+        if (this.vrMode) {
             stopVrControlService();
             unbindVrControlService();
             if (vrCameraManager != null) {
@@ -2339,18 +2329,17 @@ public class Game extends Activity implements SurfaceHolder.Callback,
 
     private void loadVrLensPreferences() {
         if (prefConfig != null) {
-            lensScale = prefConfig.vrLensScale;
-            leftLensOffsetX = prefConfig.vrLeftLensOffset;
-            rightLensOffsetX = prefConfig.vrRightLensOffset;
-            lensLockEnabled = prefConfig.lockVrLenses;
+            this.lensScale = prefConfig.vrLensScale;
+            this.leftLensOffsetX = prefConfig.vrLeftLensOffset;
+            this.rightLensOffsetX = prefConfig.vrRightLensOffset;
+            this.lensLockEnabled = prefConfig.lockVrLenses;
             return;
         }
-        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
-        lensScale = prefs.getFloat(PreferenceConfiguration.VR_LENS_SCALE_PREF_STRING,
-                PreferenceConfiguration.DEFAULT_VR_LENS_SCALE);
-        leftLensOffsetX = prefs.getFloat(PreferenceConfiguration.VR_LEFT_LENS_OFFSET_PREF_STRING, 0.0f);
-        rightLensOffsetX = prefs.getFloat(PreferenceConfiguration.VR_RIGHT_LENS_OFFSET_PREF_STRING, 0.0f);
-        lensLockEnabled = prefs.getBoolean(PreferenceConfiguration.VR_LENS_LOCK_PREF_STRING, false);
+        SharedPreferences prefs = getSharedPreferences(getPackageName() + "_preferences", Context.MODE_PRIVATE);
+        this.lensScale = prefs.getFloat(PreferenceConfiguration.VR_LENS_SCALE_PREF_STRING, PreferenceConfiguration.DEFAULT_VR_LENS_SCALE);
+        this.leftLensOffsetX = prefs.getFloat(PreferenceConfiguration.VR_LEFT_LENS_OFFSET_PREF_STRING, 0.0f);
+        this.rightLensOffsetX = prefs.getFloat(PreferenceConfiguration.VR_RIGHT_LENS_OFFSET_PREF_STRING, 0.0f);
+        this.lensLockEnabled = prefs.getBoolean(PreferenceConfiguration.VR_LENS_LOCK_PREF_STRING, false);
     }
 
     private void initVrLensControls() {
@@ -2465,7 +2454,7 @@ public class Game extends Activity implements SurfaceHolder.Callback,
     }
 
     private void saveVrLensPreferences() {
-        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
+        SharedPreferences prefs = getSharedPreferences(getPackageName() + "_preferences", Context.MODE_PRIVATE);
         prefs.edit()
                 .putFloat(PreferenceConfiguration.VR_LENS_SCALE_PREF_STRING, lensScale)
                 .putFloat(PreferenceConfiguration.VR_LEFT_LENS_OFFSET_PREF_STRING, leftLensOffsetX)
@@ -2479,8 +2468,7 @@ public class Game extends Activity implements SurfaceHolder.Callback,
     }
 
     private void refreshLensLockPreference() {
-        lensLockEnabled = PreferenceManager
-                .getDefaultSharedPreferences(this)
+        lensLockEnabled = getSharedPreferences(getPackageName() + "_preferences", Context.MODE_PRIVATE)
                 .getBoolean(PreferenceConfiguration.VR_LENS_LOCK_PREF_STRING, false);
         if (prefConfig != null) {
             prefConfig.lockVrLenses = lensLockEnabled;
