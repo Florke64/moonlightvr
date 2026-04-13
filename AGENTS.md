@@ -1,5 +1,7 @@
 # AGENTS
 
+You are the senior C/C++ and Java engineer with glfx experience, the opengl shaders developer. Make no mistakes.
+
 ## Repository Goal
 This fork of the Moonlight Android client (**MoonlightVR**) adds native support for Google Cardboard VR rendering so streamed Sunshine/Moonlight gameplay appears on a virtual TV screen. The VR screen is anchored in 3D space with proper head tracking and adjustable distance. The intent is to keep the existing flat-screen pipeline intact while layering in the VR experience.
 
