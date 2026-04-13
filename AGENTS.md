@@ -15,6 +15,7 @@ This fork of the Moonlight Android client (**MoonlightVR**) adds native support 
   - Curvature settings (mode, amount, horizontal/vertical)
   - `checkbox_enable_skybox` - Toggle skybox background
   - Lens scale and per-eye offset are now persisted along with a `checkbox_lock_vr_lenses` toggle that blocks accidental adjustments in VR mode.
+  - `checkbox_enable_vr_camera_pip` - Toggle rear camera picture-in-picture view in VR (off by default).
 - **Native build:** Custom NDK module `vr_renderer` compiles Cardboard SDK sources (via `vendor/cardboard`) alongside the existing `moonlight-core` libs, linking against `libc++_shared` and `atomic`.
 
 ## Project Structure Notes
@@ -62,7 +63,8 @@ This fork of the Moonlight Android client (**MoonlightVR**) adds native support 
 
 ## Call Graph: Java -> JNI -> Native -> Cardboard
 - `Game` (`app/src/main/java/com/limelight/Game.java`) configures VR settings and starts `VrRenderer` + `UiService`.
-- `VrRenderer` (`app/src/main/java/com/limelight/vr/VrRenderer.java`) implements `GLSurfaceView.Renderer`, handles lifecycle, exposes `setScreenDistance`, `setCurvature*`, `setSkyboxEnabled`, and uploads cubemap textures before calling native methods (`nativeCreate`, `nativeOnDrawFrame`, `nativeSetSkyboxTexture`, etc.).
+- `VrCameraManager` (`app/src/main/java/com/limelight/vr/VrCameraManager.java`) manages Camera2 capture lifecycle, opens rear camera, and streams frames to the GL Surface provided by `VrRenderer`.
+- `VrRenderer` (`app/src/main/java/com/limelight/vr/VrRenderer.java`) implements `GLSurfaceView.Renderer`, handles lifecycle, exposes `setScreenDistance`, `setCurvature*`, `setSkyboxEnabled`, camera PiP methods (`createCameraSurface`, `setCameraEnabled`, `setCameraTextureTransform`), and uploads cubemap textures before calling native methods (`nativeCreate`, `nativeOnDrawFrame`, `nativeSetSkyboxTexture`, etc.).
 - JNI bridge (`app/src/main/jni/vr/vr_renderer_jni.cc`) forwards every GL/VR call to `VrMoonlightApp` (create, destroy, surface events, transforms, preference setters, skybox toggles), and exposes `nativeOnDrawFrame()` for each frame.
 - Native renderer (`app/src/main/jni/vr/vr_renderer.cpp/.h`) allocates Cardboard helpers, compiles shaders, builds meshes, updates model matrices, and orchestrates `RenderVideoToTexture()` plus skybox drawing.
 - Cardboard SDK sources under `vendor/cardboard/` supply:
@@ -91,6 +93,18 @@ This fork of the Moonlight Android client (**MoonlightVR**) adds native support 
 - **Shaders:** `kVideo*`, `kLine*`, and `kSkybox*` shader strings near the top of `vr_renderer.cpp`; adjust these strings and the associated attribute/uniform lookups when changing shading behavior.
 - **Lifecycle/resource safety:** `VrRenderer` handles texture creation/release, context loss, and `surfaceListener` callbacks; extend it if you need to reinitialize additional GL resources during a context reset or add a custom `Skybox` loader.
  - **Lens distortion customization:** `UpdateDeviceParams()` now tracks a mesh dirty flag so `TransformLensMesh()` can scale and clamp horizontal offsets per eye without rebuilding the Cardboard renderer, making zoom/pan gestures feel immediate.
+
+## Camera PiP Feature
+The VR mode includes an optional rear camera picture-in-picture (PiP) view that displays the device's rear camera feed on a secondary screen in VR space.
+
+- **Camera API:** Uses Camera2 API to open the first rear-facing camera (`CameraCharacteristics.LENS_FACING_BACK`).
+- **Surface Pipeline:** `VrRenderer.createCameraSurface()` creates an OES texture wrapped in a `SurfaceTexture` + `Surface`. This `Surface` is passed to `VrCameraManager` which runs a capture session and streams frames to it.
+- **Transform:** Camera frame transform includes a +90° rotation correction applied via `Matrix.multiplyMM()` in `VrRenderer.onDrawFrame()` to orient the feed upright in VR.
+- **Rendering:** Native C++ renders the camera texture to a separate PiP quad positioned below the main game screen (`UpdateCameraModelMatrix()`), drawn per-eye with its own MVP matrix in `RenderVideoToTexture()`.
+- **Preference:** Controlled by `checkbox_enable_vr_camera_pip` in preferences (default: off). Camera starts only when enabled and user grants runtime camera permission.
+- **Files:**
+  - `app/src/main/java/com/limelight/vr/VrCameraManager.java` - Camera2 wrapper managing capture lifecycle.
+  - Native camera methods in `vr_renderer.cpp` (`SetCameraTexture`, `SetCameraTextureTransform`, `SetCameraEnabled`, `UpdateCameraModelMatrix`).
 
 ## Debug Checklist
 - **GL shader compile/link logs:** `LoadGLShader()` logs shader compile failures; `VrMoonlightApp::OnSurfaceCreated()` now checks program link status and logs info logs.
