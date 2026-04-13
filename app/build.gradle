@@ -90,16 +90,22 @@ android {
 
     signingConfigs {
         ciSigning {
-            def hasAllSigningProps = project.hasProperty('MOONLIGHTVR_STORE_FILE') &&
-                                    project.hasProperty('MOONLIGHTVR_STORE_PASSWORD') &&
-                                    project.hasProperty('MOONLIGHTVR_KEY_ALIAS') &&
-                                    project.hasProperty('MOONLIGHTVR_KEY_PASSWORD')
+            def ciStoreFilePath = project.findProperty('MOONLIGHTVR_STORE_FILE')?.toString()?.trim()
+            def ciStorePassword = project.findProperty('MOONLIGHTVR_STORE_PASSWORD')?.toString()?.trim()
+            def ciKeyAlias = project.findProperty('MOONLIGHTVR_KEY_ALIAS')?.toString()?.trim()
+            def ciKeyPassword = project.findProperty('MOONLIGHTVR_KEY_PASSWORD')?.toString()?.trim()
+            def ciStoreFileObject = ciStoreFilePath ? file(ciStoreFilePath) : null
+
+            def hasAllSigningProps = ciStoreFileObject?.exists() &&
+                                    ciStorePassword &&
+                                    ciKeyAlias &&
+                                    ciKeyPassword
 
             if (hasAllSigningProps) {
-                storeFile project.property('MOONLIGHTVR_STORE_FILE')
-                storePassword project.property('MOONLIGHTVR_STORE_PASSWORD')
-                keyAlias project.property('MOONLIGHTVR_KEY_ALIAS')
-                keyPassword project.property('MOONLIGHTVR_KEY_PASSWORD')
+                storeFile ciStoreFileObject
+                storePassword ciStorePassword
+                keyAlias ciKeyAlias
+                keyPassword ciKeyPassword
             }
         }
     }
