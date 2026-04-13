@@ -81,7 +81,6 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
         release {
-            applicationIdSuffix ".unofficial"
             resValue "string", "app_label", "MoonlightVR"
 
             minifyEnabled true
