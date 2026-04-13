@@ -110,11 +110,9 @@ android {
         }
     }
 
-    applicationVariants.all { variant ->
-        def ciConfig = android.signingConfigs.ciSigning
-        if (ciConfig.storeFile) {
-            variant.signingConfig = ciConfig
-        }
+    if (android.signingConfigs.ciSigning.storeFile != null) {
+        buildTypes.debug.signingConfig android.signingConfigs.ciSigning
+        buildTypes.release.signingConfig android.signingConfigs.ciSigning
     }
 
     externalNativeBuild {
