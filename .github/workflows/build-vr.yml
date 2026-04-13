@@ -64,7 +64,7 @@ jobs:
           BUILD_TYPE="${{ github.event.inputs.build_type || 'release' }}"
           WORKFLOW_VERSION="${{ steps.version.outputs.WORKFLOW_VERSION }}"
           SHA_SHORT=$(echo ${{ github.sha }} | cut -c1-8)
-          APK_PATH="app/build/outputs/apk/vrMode/${BUILD_TYPE,,}/app-vrMode-${BUILD_TYPE,,}.apk"
+          APK_PATH="app/build/outputs/apk/vrMode/${BUILD_TYPE,,}/app-vrMode-${BUILD_TYPE,,}-unsigned.apk"
           
           if [ -f "$APK_PATH" ]; then
             NEW_NAME="MoonlightVR-VrMode-${WORKFLOW_VERSION}.apk"
