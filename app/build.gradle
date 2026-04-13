@@ -16,7 +16,15 @@ android {
 
         // Generate native debug symbols to allow Google Play to symbolicate our native crashes
         ndk.debugSymbolLevel = 'FULL'
-        missingDimensionStrategy "root", "nonRoot"
+        ndk {
+            abiFilters 'arm64-v8a'
+        }
+    }
+    
+    if (project.hasProperty('includeX64')) {
+        android.productFlavors.all { flavor ->
+            flavor.ndk.abiFilters 'arm64-v8a', 'x86_64'
+        }
     }
 
     flavorDimensions.add("root")
@@ -26,22 +34,6 @@ android {
     }
 
     productFlavors {
-        root {
-            // Android O has native mouse capture, so don't show the rooted
-            // version to devices running O on the Play Store.
-            maxSdk 25
-
-            externalNativeBuild {
-                ndkBuild {
-                    arguments "PRODUCT_FLAVOR=root"
-                }
-            }
-
-            applicationId "pl.florke.moonlightvr.root"
-            dimension "root"
-            buildConfigField "boolean", "ROOT_BUILD", "true"
-        }
-
         nonRoot {
             externalNativeBuild {
                 ndkBuild {
@@ -84,7 +76,6 @@ android {
         debug {
             applicationIdSuffix ".debug"
             resValue "string", "app_label", "MoonlightVR (Debug)"
-            resValue "string", "app_label_root", "MoonlightVR (Root Debug)"
 
             minifyEnabled true
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
@@ -92,7 +83,6 @@ android {
         release {
             applicationIdSuffix ".unofficial"
             resValue "string", "app_label", "MoonlightVR"
-            resValue "string", "app_label_root", "MoonlightVR (Root)"
 
             minifyEnabled true
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'

@@ -10,7 +10,6 @@ on:
         type: choice
         options:
           - nonRoot
-          - root
       build_type:
         description: 'Build Type'
         required: true
@@ -50,9 +49,16 @@ jobs:
 
       - name: Build production APK
         run: |
-          FLAVOR=$(echo "${{ github.event.inputs.flavor }}" | sed 's/./\U&/')
-          BUILD_TYPE=$(echo "${{ github.event.inputs.build_type }}" | sed 's/./\U&/')
-          ./gradlew :app:assemble${FLAVOR}${BUILD_TYPE} --no-daemon
+          FLAVOR_INPUT="${{ github.event.inputs.flavor || 'nonRoot' }}"
+          BUILD_TYPE_INPUT="${{ github.event.inputs.build_type || 'release' }}"
+          FLAVOR=$(echo "${FLAVOR_INPUT}" | sed 's/./\U&/')
+          BUILD_TYPE=$(echo "${BUILD_TYPE_INPUT}" | sed 's/./\U&/')
+          GRADLE_OPTS=""
+          BRANCH_NAME="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}"
+          if [[ "$BRANCH_NAME" == "main" || "$BRANCH_NAME" == "refs/heads/main" || "$BRANCH_NAME" == main ]]; then
+            GRADLE_OPTS="-PincludeX64"
+          fi
+          ./gradlew :app:assemble${FLAVOR}${BUILD_TYPE} $GRADLE_OPTS --no-daemon
 
       - name: Rename APK with metadata
         run: |

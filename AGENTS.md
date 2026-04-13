@@ -38,14 +38,15 @@ This fork of the Moonlight Android client (**MoonlightVR**) adds native support 
 
 ## For New Agents
 - **Important:** Do NOT modify or commit changes to git submodules (especially `vendor/cardboard/`). Only operate on the main `moonlight-android` branch code. Submodule updates should only be done manually by the repository owner.
-- **Build Requirements:** Building this project requires Java 17+ (Java 25 recommended). Ensure you build with:
+- **Dependency Warning:** Never add, never remove, never update dependencies (Gradle plugins, Android libraries, etc.) unless you fully understand the cascading effects. Dependency changes or environment updates can break the build pipeline, or increase project complexity.
+- **Build Requirements:** Building this project requires Java 21. Use Java 21 for all builds:
   ```bash
-  export JAVA_HOME=/usr/lib/jvm/java-25-openjdk-amd64 && ./gradlew :app:assembleDebug
+  export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 && ./gradlew :app:assembleDebug
   ```
 - **Toolchain Versions:**
   - **AGP:** 8.13.2 (Android Gradle Plugin)
   - **Gradle:** 8.13
-  - **Java:** 25 (also works with Java 17-24)
+  - **Java:** 21 (LTS)
   - **ProGuard/R8:** Uses `proguard-android-optimize.txt` (not the deprecated `proguard-android.txt`)
   - **compileSdk:** 35 (targetSdk: 35, minSdk: 21)
 - Start with `Game` and `VrRenderer` to understand how the Java layer chooses paths and passes parameters to JNI.
