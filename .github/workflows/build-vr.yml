@@ -1,0 +1,97 @@
+name: Build VR fork (test)
+
+on:
+  workflow_dispatch:
+    inputs:
+      flavor:
+        description: 'Product Flavor'
+        required: true
+        default: 'nonRoot'
+        type: choice
+        options:
+          - nonRoot
+          - root
+      build_type:
+        description: 'Build Type'
+        required: true
+        default: 'release'
+        type: choice
+        options:
+          - release
+          - debug
+
+jobs:
+  build:
+    if: github.ref_name == 'vr' || github.ref_name == 'refs/heads/vr'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: vr
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '25'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Build production APK
+        run: |
+          FLAVOR=$(echo "${{ github.event.inputs.flavor }}" | sed 's/./\U&/')
+          BUILD_TYPE=$(echo "${{ github.event.inputs.build_type }}" | sed 's/./\U&/')
+          ./gradlew :app:assemble${FLAVOR}${BUILD_TYPE} --no-daemon
+
+      - name: Rename APK with metadata
+        run: |
+          FLAVOR=${{ github.event.inputs.flavor }}
+          BUILD_TYPE=${{ github.event.inputs.build_type }}
+          TIMESTAMP=$(date +'%Y%m%d_%H%M%S')
+          SHA_SHORT=$(echo ${{ github.sha }} | cut -c1-8)
+          APK_PATH="app/build/outputs/apk/${FLAVOR,,}/${BUILD_TYPE}/app-${FLAVOR,,}-${BUILD_TYPE}.apk"
+          
+          if [ -f "$APK_PATH" ]; then
+            NEW_NAME="MoonlightVR-${FLAVOR}-${BUILD_TYPE}-${TIMESTAMP}-${SHA_SHORT}.apk"
+            cp "$APK_PATH" "$NEW_NAME"
+            echo "APK_NAME=$NEW_NAME" >> $GITHUB_ENV
+            echo "APK exists at: $APK_PATH"
+          else
+            echo "Error: APK not found at $APK_PATH"
+            exit 1
+          fi
+
+      - name: Upload APK as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MoonlightVR-${{ github.event.inputs.flavor }}-${{ github.event.inputs.build_type }}
+          path: MoonlightVR-*.apk
+          retention-days: 30
+
+      - name: Upload Build Logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs
+          path: |
+            build/reports/
+            app/build/outputs/**/*.txt
+            app/build/outputs/**/*.log
+          retention-days: 7
+
+      - name: Summary
+        run: |
+          echo "## Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Branch | vr |" >> $GITHUB_STEP_SUMMARY
+          echo "| Flavor | ${{ github.event.inputs.flavor }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Build Type | ${{ github.event.inputs.build_type }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Commit | ${{ github.sha }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| APK | ${{ env.APK_NAME }} |" >> $GITHUB_STEP_SUMMARY
