@@ -37,6 +37,7 @@ import com.limelight.utils.ShortcutHelper;
 import com.limelight.utils.SpinnerDialog;
 import com.limelight.utils.UiHelper;
 import com.limelight.vr.VrRenderer;
+import com.limelight.vr.VrCameraManager;
 import com.limelight.vr.VrControlService;
 
 import android.annotation.SuppressLint;
@@ -49,6 +50,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.ServiceConnection;
 import android.content.SharedPreferences;
+import android.Manifest;
 import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
@@ -159,6 +161,8 @@ public class Game extends Activity implements SurfaceHolder.Callback,
     private int activeLensSide = 0;
     private static final int LENS_SIDE_LEFT = 1;
     private static final int LENS_SIDE_RIGHT = 2;
+    private static final int CAMERA_PERMISSION_REQ = 1001;
+    private VrCameraManager vrCameraManager;
     private final VrRenderer.SurfaceListener vrSurfaceListener = new VrRenderer.SurfaceListener() {
         @Override
         public void onSurfaceReady(Surface surface) {
@@ -257,48 +261,50 @@ public class Game extends Activity implements SurfaceHolder.Callback,
         // Read the stream preferences early for VR mode check
         prefConfig = PreferenceConfiguration.readPreferences(this);
         tombstonePrefs = Game.this.getSharedPreferences("DecoderTombstone", 0);
+        vrSurfaceView = findViewById(R.id.vrSurfaceView);
 
-            vrMode = getIntent().getBooleanExtra(EXTRA_ENABLE_VR, false) ||
-                    (prefConfig != null && prefConfig.enableVr);
-            vrSurfaceView = findViewById(R.id.vrSurfaceView);
-            if (vrMode) {
-                loadVrLensPreferences();
-                vrSurfaceView.setVisibility(View.VISIBLE);
-                vrRenderer = new VrRenderer(this, vrSurfaceView, vrSurfaceListener);
-                vrRenderer.setScreenDistance(prefConfig.vrScreenDistanceMeters);
-                vrRenderer.setScreenSize(prefConfig.vrScreenSizeMultiplier);
-                vrRenderer.setCurvatureMode(prefConfig.vrCurvatureMode);
-                vrRenderer.setCurvatureAmount(prefConfig.vrCurvatureAmountPercent);
-                vrRenderer.setHorizontalCurvature(prefConfig.vrHorizontalCurvaturePercent);
-                vrRenderer.setVerticalCurvature(prefConfig.vrVerticalCurvaturePercent);
-                vrRenderer.setSkyboxEnabled(prefConfig.enableSkybox);
-                vrSurfaceView.setEGLContextClientVersion(2);
-                vrSurfaceView.setRenderer(vrRenderer);
-                vrSurfaceView.setRenderMode(GLSurfaceView.RENDERMODE_CONTINUOUSLY);
-                initVrLensControls();
+        vrMode = getIntent().getBooleanExtra(EXTRA_ENABLE_VR, false) ||
+                (prefConfig != null && prefConfig.enableVr);
+        if (vrMode) {
+            loadVrLensPreferences();
+            vrSurfaceView.setVisibility(View.VISIBLE);
+            vrRenderer = new VrRenderer(this, vrSurfaceView, vrSurfaceListener);
+            vrRenderer.setScreenDistance(prefConfig.vrScreenDistanceMeters);
+            vrRenderer.setScreenSize(prefConfig.vrScreenSizeMultiplier);
+            vrRenderer.setCurvatureMode(prefConfig.vrCurvatureMode);
+            vrRenderer.setCurvatureAmount(prefConfig.vrCurvatureAmountPercent);
+            vrRenderer.setHorizontalCurvature(prefConfig.vrHorizontalCurvaturePercent);
+            vrRenderer.setVerticalCurvature(prefConfig.vrVerticalCurvaturePercent);
+            vrRenderer.setSkyboxEnabled(prefConfig.enableSkybox);
+            vrSurfaceView.setEGLContextClientVersion(2);
+            vrSurfaceView.setRenderer(vrRenderer);
+            vrSurfaceView.setRenderMode(GLSurfaceView.RENDERMODE_CONTINUOUSLY);
+            initVrLensControls();
 
-                if (prefConfig.enableSkybox) {
-                    final int[] panoramaResources = new int[] {
-                        R.drawable.panorama_0,
-                        R.drawable.panorama_1,
-                        R.drawable.panorama_2,
-                        R.drawable.panorama_3,
-                        R.drawable.panorama_4,
-                        R.drawable.panorama_5
-                    };
-                    vrSurfaceView.queueEvent(new Runnable() {
-                        @Override
-                        public void run() {
-                            vrRenderer.loadSkyboxCubemap(getResources(), panoramaResources);
-                        }
-                    });
-                }
+            vrCameraManager = new VrCameraManager(this);
 
-                startVrControlService(vrRenderer);
+            if (prefConfig.enableSkybox) {
+                final int[] panoramaResources = new int[] {
+                    R.drawable.panorama_0,
+                    R.drawable.panorama_1,
+                    R.drawable.panorama_2,
+                    R.drawable.panorama_3,
+                    R.drawable.panorama_4,
+                    R.drawable.panorama_5
+                };
+                vrSurfaceView.queueEvent(new Runnable() {
+                    @Override
+                    public void run() {
+                        vrRenderer.loadSkyboxCubemap(getResources(), panoramaResources);
+                    }
+                });
             }
-            else {
-                vrSurfaceView.setVisibility(View.GONE);
-            }
+
+            startVrControlService(vrRenderer);
+        }
+        else {
+            vrSurfaceView.setVisibility(View.GONE);
+        }
 
         // Start the spinner
         spinner = SpinnerDialog.displayDialog(this, getResources().getString(R.string.conn_establishing_title),
@@ -1143,6 +1149,9 @@ public class Game extends Activity implements SurfaceHolder.Callback,
         if (vrMode) {
             stopVrControlService();
             unbindVrControlService();
+            if (vrCameraManager != null) {
+                vrCameraManager.stopCamera();
+            }
         }
 
         if (vrRenderer != null) {
@@ -1168,6 +1177,10 @@ public class Game extends Activity implements SurfaceHolder.Callback,
         }
 
         if (vrMode && vrRenderer != null) {
+            if (vrCameraManager != null) {
+                vrCameraManager.stopCamera();
+            }
+            vrRenderer.setCameraEnabled(false);
             vrRenderer.onPause();
         }
 
@@ -1181,6 +1194,10 @@ public class Game extends Activity implements SurfaceHolder.Callback,
         if (vrMode && vrRenderer != null) {
             vrRenderer.onResume();
             refreshLensLockPreference();
+            if (prefConfig == null) {
+                prefConfig = PreferenceConfiguration.readPreferences(this);
+            }
+            maybeStartVrCamera();
         }
     }
 
@@ -2828,6 +2845,7 @@ public class Game extends Activity implements SurfaceHolder.Callback,
                     return;
                 }
                 vrRenderSurface = surface;
+                maybeStartVrCamera();
                 startConnectionWithSurface(surface);
             }
         });
@@ -3022,6 +3040,54 @@ public class Game extends Activity implements SurfaceHolder.Callback,
         } catch (IllegalArgumentException ignored) {
         } finally {
             connectedToVrControlService = false;
+        }
+    }
+
+    private void initVrCamera() {
+        if (vrSurfaceView == null || vrRenderer == null || vrCameraManager == null) {
+            return;
+        }
+        vrSurfaceView.queueEvent(new Runnable() {
+            @Override
+            public void run() {
+                Surface cameraSurface = vrRenderer.createCameraSurface();
+                vrCameraManager.startCamera(cameraSurface);
+                vrRenderer.setCameraEnabled(true);
+            }
+        });
+    }
+
+    private void maybeStartVrCamera() {
+        if (!vrMode || vrRenderer == null || vrCameraManager == null || vrRenderSurface == null) {
+            return;
+        }
+        if (prefConfig != null && !prefConfig.enableVrCameraPip) {
+            if (vrCameraManager.isStarted()) {
+                vrCameraManager.stopCamera();
+                vrRenderer.setCameraEnabled(false);
+            }
+            return;
+        }
+        if (vrCameraManager.isStarted()) {
+            return;
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
+                checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{Manifest.permission.CAMERA}, CAMERA_PERMISSION_REQ);
+            return;
+        }
+        initVrCamera();
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == CAMERA_PERMISSION_REQ) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                maybeStartVrCamera();
+            } else {
+                LimeLog.warning("Camera permission denied");
+            }
         }
     }
 }

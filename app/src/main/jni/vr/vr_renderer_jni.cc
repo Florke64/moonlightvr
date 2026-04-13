@@ -197,9 +197,35 @@ Java_com_limelight_vr_VrRenderer_nativeAdjustLeftLensOffset(JNIEnv*, jobject,
 
 extern "C" JNIEXPORT void JNICALL
 Java_com_limelight_vr_VrRenderer_nativeAdjustRightLensOffset(JNIEnv*, jobject,
-                                                              jlong handle,
-                                                              jfloat deltaX) {
+                                                               jlong handle,
+                                                               jfloat deltaX) {
   FromHandle(handle)->AdjustRightLensOffset(deltaX);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_limelight_vr_VrRenderer_nativeSetCameraTexture(JNIEnv*, jobject,
+                                                        jlong handle,
+                                                        jint textureId) {
+  FromHandle(handle)->SetCameraTexture(static_cast<GLuint>(textureId));
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_limelight_vr_VrRenderer_nativeSetCameraTextureTransform(JNIEnv* env, jobject,
+                                                                 jlong handle,
+                                                                 jfloatArray transformArray) {
+  if (transformArray == nullptr) {
+    return;
+  }
+  jfloat* transform = env->GetFloatArrayElements(transformArray, nullptr);
+  FromHandle(handle)->SetCameraTextureTransform(transform);
+  env->ReleaseFloatArrayElements(transformArray, transform, JNI_ABORT);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_limelight_vr_VrRenderer_nativeSetCameraEnabled(JNIEnv*, jobject,
+                                                        jlong handle,
+                                                        jboolean enabled) {
+  FromHandle(handle)->SetCameraEnabled(enabled);
 }
 
 extern "C" JNIEXPORT jfloat JNICALL

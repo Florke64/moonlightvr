@@ -43,6 +43,9 @@ class VrMoonlightApp {
   void SetLensScale(float scale);
   void AdjustLeftLensOffset(float deltaX);
   void AdjustRightLensOffset(float deltaX);
+  void SetCameraTexture(GLuint textureId);
+  void SetCameraTextureTransform(const float* transform);
+  void SetCameraEnabled(bool enabled);
   float GetCurvatureAmount() const;
   float GetHorizontalCurvature() const;
   float GetVerticalCurvature() const;
@@ -61,6 +64,7 @@ class VrMoonlightApp {
   void UpdateScreenGeometry();
   void TransformLensMesh(std::vector<float>& vertices, float scale,
                          float offset_x, bool is_left_eye);
+  void UpdateCameraModelMatrix();
 
   JavaVM* java_vm_;
   jobject activity_;
@@ -129,6 +133,10 @@ class VrMoonlightApp {
   float left_lens_offset_x_ = 0.0f;
   float right_lens_offset_x_ = 0.0f;
   bool lens_mesh_dirty_ = true;
+  GLuint camera_texture_ = 0;
+  bool camera_enabled_ = false;
+  float camera_texture_transform_[16];
+  Matrix4x4 camera_model_matrix_;
 };
 
 }  // namespace moonlight_vr

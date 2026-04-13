@@ -214,10 +214,16 @@ VrMoonlightApp::VrMoonlightApp(JavaVM* vm, jobject activity, jobject asset_manag
 
   UpdateModelMatrix();
   UpdateScreenGeometry();
+  UpdateCameraModelMatrix();
+
+  std::fill(std::begin(camera_texture_transform_), std::end(camera_texture_transform_), 0.f);
+  camera_texture_transform_[0] = camera_texture_transform_[5] =
+      camera_texture_transform_[10] = camera_texture_transform_[15] = 1.f;
 }
 
 VrMoonlightApp::~VrMoonlightApp() {
   DestroyCardboardResources();
+
   if (render_texture_) {
     glDeleteTextures(1, &render_texture_);
   }
@@ -236,16 +242,20 @@ VrMoonlightApp::~VrMoonlightApp() {
   if (depth_renderbuffer_) {
     glDeleteRenderbuffers(1, &depth_renderbuffer_);
   }
-  if (head_tracker_) {
+  if (head_tracker_ != nullptr) {
     CardboardHeadTracker_destroy(head_tracker_);
+    head_tracker_ = nullptr;
   }
+
   JNIEnv* env = nullptr;
   if (java_vm_->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) == JNI_OK) {
     if (activity_) {
       env->DeleteGlobalRef(activity_);
+      activity_ = nullptr;
     }
     if (java_asset_mgr_) {
       env->DeleteGlobalRef(java_asset_mgr_);
+      java_asset_mgr_ = nullptr;
     }
   }
 }
@@ -721,6 +731,38 @@ void VrMoonlightApp::RenderVideoToTexture(
     }
   }
 
+  if (camera_enabled_ && camera_texture_ != 0) {
+    glUniformMatrix4fv(texture_transform_uniform_, 1, GL_FALSE, camera_texture_transform_);
+    glBindTexture(GL_TEXTURE_EXTERNAL_OES, camera_texture_);
+
+    glVertexAttribPointer(position_attrib_, 3, GL_FLOAT, GL_FALSE,
+                          sizeof(GLfloat) * 3, kQuadVertices);
+    glVertexAttribPointer(texcoord_attrib_, 2, GL_FLOAT, GL_FALSE, 0,
+                          kQuadTexCoords);
+    glEnableVertexAttribArray(position_attrib_);
+    glEnableVertexAttribArray(texcoord_attrib_);
+
+    for (int eye_index = 0; eye_index < kEyeCount; ++eye_index) {
+      float eye_from_head_raw[16];
+      CardboardLensDistortion_getEyeFromHeadMatrix(
+          lens_distortion_, eyes[eye_index], eye_from_head_raw);
+      Matrix4x4 eye_from_head = GetMatrixFromGlArray(eye_from_head_raw);
+
+      float projection_raw[16];
+      CardboardLensDistortion_getProjectionMatrix(
+          lens_distortion_, eyes[eye_index], kZNear, kZFar, projection_raw);
+      Matrix4x4 projection = GetMatrixFromGlArray(projection_raw);
+
+      Matrix4x4 view = eye_from_head * head_view;
+      Matrix4x4 camera_mvp = projection * view * camera_model_matrix_;
+      std::array<float, 16> camera_mvp_gl = camera_mvp.ToGlArray();
+
+      glViewport(viewport_x[eye_index], 0, viewport_width[eye_index], screen_height_);
+      glUniformMatrix4fv(mvp_uniform_, 1, GL_FALSE, camera_mvp_gl.data());
+      glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+    }
+  }
+
   glDisableVertexAttribArray(position_attrib_);
   glDisableVertexAttribArray(texcoord_attrib_);
   glBindTexture(GL_TEXTURE_EXTERNAL_OES, 0);
@@ -1051,6 +1093,30 @@ void VrMoonlightApp::UpdateScreenGeometry() {
     }
   }
   using_curved_geometry_ = true;
+}
+
+void VrMoonlightApp::UpdateCameraModelMatrix() {
+  const float pip_width = 0.8f;
+  const float pip_height = pip_width / (16.0f / 9.0f);
+
+  const std::array<float, 3> scale = {pip_width * 0.5f, -pip_height * 0.5f, 1.0f};
+  const std::array<float, 3> translation = {0.0f, -0.6f, -1.2f};
+
+  camera_model_matrix_ = GetTranslationMatrix(translation) * GetScaleMatrix(scale);
+}
+
+void VrMoonlightApp::SetCameraTexture(GLuint texture_id) {
+  camera_texture_ = texture_id;
+}
+
+void VrMoonlightApp::SetCameraTextureTransform(const float* transform) {
+  if (transform != nullptr) {
+    std::copy(transform, transform + 16, camera_texture_transform_);
+  }
+}
+
+void VrMoonlightApp::SetCameraEnabled(bool enabled) {
+  camera_enabled_ = enabled;
 }
 
 }  // namespace moonlight_vr

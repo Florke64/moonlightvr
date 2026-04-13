@@ -80,6 +80,7 @@ public class PreferenceConfiguration {
     public static final String VR_LEFT_LENS_OFFSET_PREF_STRING = "vr_left_lens_offset_x";
     public static final String VR_RIGHT_LENS_OFFSET_PREF_STRING = "vr_right_lens_offset_x";
     public static final String VR_LENS_LOCK_PREF_STRING = "checkbox_lock_vr_lenses";
+    public static final String VR_ENABLE_CAMERA_PIP_PREF_STRING = "checkbox_enable_vr_camera_pip";
     public static final float DEFAULT_VR_LENS_SCALE = 1.0f;
 
     static final String DEFAULT_RESOLUTION = "1280x720";
@@ -129,6 +130,7 @@ public class PreferenceConfiguration {
     private static final int DEFAULT_VR_CURVATURE_AMOUNT_INT = 50;
     private static final int DEFAULT_VR_HORIZONTAL_CURVATURE_INT = 50;
     private static final int DEFAULT_VR_VERTICAL_CURVATURE_INT = 50;
+    private static final boolean DEFAULT_ENABLE_VR_CAMERA_PIP = false;
 
     public static final int FRAME_PACING_MIN_LATENCY = 0;
     public static final int FRAME_PACING_BALANCED = 1;
@@ -191,6 +193,7 @@ public class PreferenceConfiguration {
     public float vrLeftLensOffset;
     public float vrRightLensOffset;
     public boolean lockVrLenses;
+    public boolean enableVrCameraPip;
 
     public static boolean isNativeResolution(int width, int height) {
         // It's not a native resolution if it matches an existing resolution option
@@ -642,6 +645,7 @@ public class PreferenceConfiguration {
         config.vrLeftLensOffset = prefs.getFloat(VR_LEFT_LENS_OFFSET_PREF_STRING, 0.0f);
         config.vrRightLensOffset = prefs.getFloat(VR_RIGHT_LENS_OFFSET_PREF_STRING, 0.0f);
         config.lockVrLenses = prefs.getBoolean(VR_LENS_LOCK_PREF_STRING, false);
+        config.enableVrCameraPip = prefs.getBoolean(VR_ENABLE_CAMERA_PIP_PREF_STRING, DEFAULT_ENABLE_VR_CAMERA_PIP);
         config.enablePip = prefs.getBoolean(ENABLE_PIP_PREF_STRING, DEFAULT_ENABLE_PIP);
         config.enablePerfOverlay = prefs.getBoolean(ENABLE_PERF_OVERLAY_STRING, DEFAULT_ENABLE_PERF_OVERLAY);
         config.bindAllUsb = prefs.getBoolean(BIND_ALL_USB_STRING, DEFAULT_BIND_ALL_USB);

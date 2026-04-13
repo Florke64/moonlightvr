@@ -6,13 +6,17 @@ import android.graphics.SurfaceTexture;
 import javax.microedition.khronos.egl.EGLConfig;
 import android.opengl.GLSurfaceView;
 import android.opengl.GLSurfaceView.Renderer;
+import android.opengl.GLES20;
+import android.opengl.GLES11Ext;
+import android.os.Handler;
+import android.os.Looper;
+import android.opengl.Matrix;
 import android.os.SystemClock;
 import android.view.Surface;
 import android.content.res.Resources;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.opengl.GLUtils;
-import android.opengl.GLES20;
 
 import com.limelight.LimeLog;
 
@@ -41,6 +45,74 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
     private int[] skyboxResourceIds;
     private Resources skyboxResources;
     private int skyboxTextureId = 0;
+    private int cameraTextureId = 0;
+    private float[] cameraTextureTransform = new float[16];
+    private float[] cameraTransformScratch = new float[16];
+    private final float[] cameraRotationMatrix = new float[16];
+    private SurfaceTexture cameraSurfaceTexture;
+    private Surface cameraSurface;
+    private volatile boolean cameraFrameAvailable = false;
+
+    public Surface createCameraSurface() {
+        if (cameraSurface != null) {
+            cameraSurface.release();
+            cameraSurface = null;
+        }
+        if (cameraSurfaceTexture != null) {
+            cameraSurfaceTexture.setOnFrameAvailableListener(null);
+            cameraSurfaceTexture.release();
+            cameraSurfaceTexture = null;
+        }
+
+        int[] textures = new int[1];
+        GLES20.glGenTextures(1, textures, 0);
+        cameraTextureId = textures[0];
+        GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, cameraTextureId);
+        GLES20.glTexParameteri(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_LINEAR);
+        GLES20.glTexParameteri(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_LINEAR);
+        GLES20.glTexParameteri(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GLES20.GL_TEXTURE_WRAP_S, GLES20.GL_CLAMP_TO_EDGE);
+        GLES20.glTexParameteri(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GLES20.GL_TEXTURE_WRAP_T, GLES20.GL_CLAMP_TO_EDGE);
+
+        cameraSurfaceTexture = new SurfaceTexture(cameraTextureId);
+        cameraSurfaceTexture.setDefaultBufferSize(1280, 720);
+        cameraSurfaceTexture.setOnFrameAvailableListener(new SurfaceTexture.OnFrameAvailableListener() {
+            @Override
+            public void onFrameAvailable(SurfaceTexture surfaceTexture) {
+                cameraFrameAvailable = true;
+                glSurfaceView.requestRender();
+            }
+        }, new Handler(Looper.getMainLooper()));
+
+        cameraSurface = new Surface(cameraSurfaceTexture);
+        setCameraTexture(cameraTextureId);
+
+        // precompute rotation matrix once - rotate +90 degrees around Z to correct orientation
+        Matrix.setIdentityM(cameraRotationMatrix, 0);
+        Matrix.translateM(cameraRotationMatrix, 0, 0.5f, 0.5f, 0f);
+        Matrix.rotateM(cameraRotationMatrix, 0, 90f, 0f, 0f, 1f);
+        Matrix.translateM(cameraRotationMatrix, 0, -0.5f, -0.5f, 0f);
+
+        return cameraSurface;
+    }
+
+    public void setCameraTexture(int textureId) {
+        this.cameraTextureId = textureId;
+        nativeSetCameraTexture(nativeHandle, textureId);
+    }
+
+    public void setCameraTextureTransform(float[] transform) {
+        nativeSetCameraTextureTransform(nativeHandle, transform);
+    }
+
+    public void setCameraEnabled(boolean enabled) {
+        nativeSetCameraEnabled(nativeHandle, enabled);
+    }
+
+    public void updateCameraTextureTransform(float[] transform) {
+        if (transform != null) {
+            System.arraycopy(transform, 0, cameraTextureTransform, 0, 16);
+        }
+    }
 
     public VrRenderer(Context context, GLSurfaceView glSurfaceView, SurfaceListener surfaceListener) {
         this.glSurfaceView = glSurfaceView;
@@ -96,6 +168,18 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
             } catch (Exception e) {
             }
         }
+        if (cameraSurfaceTexture != null && cameraFrameAvailable) {
+            try {
+                cameraSurfaceTexture.updateTexImage();
+                cameraSurfaceTexture.getTransformMatrix(cameraTextureTransform);
+                System.arraycopy(cameraTextureTransform, 0, cameraTransformScratch, 0, 16);
+                Matrix.multiplyMM(cameraTextureTransform, 0, cameraRotationMatrix, 0, cameraTransformScratch, 0);
+                nativeSetCameraTextureTransform(nativeHandle, cameraTextureTransform);
+                cameraFrameAvailable = false;
+            } catch (Exception e) {
+                LimeLog.warning("Error updating camera texture: " + e.getMessage());
+            }
+        }
         nativeOnDrawFrame(nativeHandle);
     }
 
@@ -124,6 +208,20 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
     }
 
     public void release() {
+        if (cameraTextureId != 0) {
+            int[] texture = new int[] { cameraTextureId };
+            GLES20.glDeleteTextures(1, texture, 0);
+            cameraTextureId = 0;
+        }
+        if (cameraSurface != null) {
+            cameraSurface.release();
+            cameraSurface = null;
+        }
+        if (cameraSurfaceTexture != null) {
+            cameraSurfaceTexture.setOnFrameAvailableListener(null);
+            cameraSurfaceTexture.release();
+            cameraSurfaceTexture = null;
+        }
         if (skyboxTextureId != 0) {
             int[] texture = new int[] { skyboxTextureId };
             GLES20.glDeleteTextures(1, texture, 0);
@@ -402,6 +500,9 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
     private native void nativeSetSkyboxEnabled(long handle, boolean enabled);
     private native void nativeSetSkyboxTexture(long handle, int textureId);
     private native void nativeSetSkyboxBrightness(long handle, float brightness);
+    private native void nativeSetCameraTexture(long handle, int textureId);
+    private native void nativeSetCameraTextureTransform(long handle, float[] transform);
+    private native void nativeSetCameraEnabled(long handle, boolean enabled);
     private native float nativeGetCurvatureAmount(long handle);
     private native float nativeGetHorizontalCurvature(long handle);
     private native float nativeGetVerticalCurvature(long handle);
