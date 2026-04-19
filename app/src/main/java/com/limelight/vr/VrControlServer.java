@@ -8,6 +8,7 @@ import android.preference.PreferenceManager;
 import android.util.Base64;
 
 import com.limelight.BuildConfig;
+import com.limelight.preferences.PreferenceConfiguration;
 
 import fi.iki.elonen.NanoHTTPD;
 
@@ -49,6 +50,16 @@ public class VrControlServer extends NanoHTTPD {
     private static final String PREF_KEY_PASS = "keystore_pass";
     private static final String KEYSTORE_FILE = "vr_keystore.p12";
     private static final int ZOOM_ANIMATION_DURATION_MS = 500;
+    private static final String VR_SCREEN_ROTATION_PREF_KEY = "vr_screen_rotation_radians";
+    private static final String VR_SCREEN_PAN_X_PREF_KEY = "vr_screen_pan_x";
+    private static final String VR_SCREEN_PAN_Y_PREF_KEY = "vr_screen_pan_y";
+    private static final String VR_SKYBOX_BRIGHTNESS_PREF_KEY = "vr_skybox_brightness";
+    private static final float MIN_SCREEN_ROTATION_RADIANS = -1.5708f;
+    private static final float MAX_SCREEN_ROTATION_RADIANS = 1.5708f;
+    private static final float MIN_PAN_X = -1.0472f;
+    private static final float MAX_PAN_X = 1.0472f;
+    private static final float MIN_PAN_Y = -0.349f;
+    private static final float MAX_PAN_Y = 0.349f;
 
     private final Context context;
     private VrRenderer vrRenderer;
@@ -69,6 +80,9 @@ public class VrControlServer extends NanoHTTPD {
 
     public void setVrRenderer(VrRenderer renderer) {
         this.vrRenderer = renderer;
+        if (vrRenderer != null) {
+            restoreWebUiStateToRenderer();
+        }
     }
 
     private void initSecureServer() throws Exception {
@@ -145,6 +159,112 @@ public class VrControlServer extends NanoHTTPD {
     private static final float HORIZONTAL_CURVE_STEP = 10f;
     private static final float VERTICAL_CURVE_STEP = 10f;
 
+    private static float clamp(float value, float min, float max) {
+        return Math.max(min, Math.min(max, value));
+    }
+
+    private SharedPreferences getSettingsPreferences() {
+        return PreferenceManager.getDefaultSharedPreferences(context);
+    }
+
+    private float getStoredScreenDistanceMeters() {
+        int rawDistance = getSettingsPreferences().getInt(PreferenceConfiguration.VR_SCREEN_DISTANCE_PREF_STRING, 20);
+        return clamp(rawDistance / 10f, 1.0f, 4.0f);
+    }
+
+    private void persistScreenDistanceMeters(float distanceMeters) {
+        int rawDistance = Math.round(clamp(distanceMeters, 1.0f, 4.0f) * 10f);
+        getSettingsPreferences().edit().putInt(PreferenceConfiguration.VR_SCREEN_DISTANCE_PREF_STRING, rawDistance).apply();
+    }
+
+    private void persistScreenSizeMultiplier(float sizeMultiplier) {
+        int rawSize = Math.round(clamp(sizeMultiplier, 0.25f, 4.0f) * 50f);
+        getSettingsPreferences().edit().putInt(PreferenceConfiguration.VR_SCREEN_SIZE_PREF_STRING, rawSize).apply();
+    }
+
+    private void persistCurvatureMode(int mode) {
+        String modeValue = PreferenceConfiguration.VR_CURVATURE_MODE_VALUE_FLAT;
+        if (mode == VrRenderer.CURVATURE_MODE_TV_CINEMA) {
+            modeValue = PreferenceConfiguration.VR_CURVATURE_MODE_VALUE_TV_CINEMA;
+        } else if (mode == VrRenderer.CURVATURE_MODE_GAMING_SCREEN) {
+            modeValue = PreferenceConfiguration.VR_CURVATURE_MODE_VALUE_GAMING_SCREEN;
+        }
+        getSettingsPreferences().edit().putString(PreferenceConfiguration.VR_CURVATURE_MODE_PREF_STRING, modeValue).apply();
+    }
+
+    private void persistCurvatureAmount(float amountPercent) {
+        int rawAmount = Math.round(clamp(amountPercent, 0.0f, 100.0f));
+        getSettingsPreferences().edit().putInt(PreferenceConfiguration.VR_CURVATURE_AMOUNT_PREF_STRING, rawAmount).apply();
+    }
+
+    private void persistHorizontalCurvature(float horizontalPercent) {
+        int rawAmount = Math.round(clamp(horizontalPercent, 0.0f, 100.0f));
+        getSettingsPreferences().edit().putInt(PreferenceConfiguration.VR_HORIZONTAL_CURVATURE_PREF_STRING, rawAmount).apply();
+    }
+
+    private void persistVerticalCurvature(float verticalPercent) {
+        int rawAmount = Math.round(clamp(verticalPercent, 0.0f, 100.0f));
+        getSettingsPreferences().edit().putInt(PreferenceConfiguration.VR_VERTICAL_CURVATURE_PREF_STRING, rawAmount).apply();
+    }
+
+    private float getStoredRotationRadians() {
+        return clamp(getSettingsPreferences().getFloat(VR_SCREEN_ROTATION_PREF_KEY, 0.0f),
+                MIN_SCREEN_ROTATION_RADIANS, MAX_SCREEN_ROTATION_RADIANS);
+    }
+
+    private void persistRotationRadians(float rotationRadians) {
+        float clamped = clamp(rotationRadians, MIN_SCREEN_ROTATION_RADIANS, MAX_SCREEN_ROTATION_RADIANS);
+        getSettingsPreferences().edit().putFloat(VR_SCREEN_ROTATION_PREF_KEY, clamped).apply();
+    }
+
+    private void persistPan(float panX, float panY) {
+        getSettingsPreferences().edit()
+                .putFloat(VR_SCREEN_PAN_X_PREF_KEY, clamp(panX, MIN_PAN_X, MAX_PAN_X))
+                .putFloat(VR_SCREEN_PAN_Y_PREF_KEY, clamp(panY, MIN_PAN_Y, MAX_PAN_Y))
+                .apply();
+    }
+
+    private float getStoredPanX() {
+        return clamp(getSettingsPreferences().getFloat(VR_SCREEN_PAN_X_PREF_KEY, 0.0f), MIN_PAN_X, MAX_PAN_X);
+    }
+
+    private float getStoredPanY() {
+        return clamp(getSettingsPreferences().getFloat(VR_SCREEN_PAN_Y_PREF_KEY, 0.0f), MIN_PAN_Y, MAX_PAN_Y);
+    }
+
+    private float getStoredSkyboxBrightness() {
+        return clamp(getSettingsPreferences().getFloat(VR_SKYBOX_BRIGHTNESS_PREF_KEY, 1.0f), 0.0f, 1.0f);
+    }
+
+    private void persistSkyboxBrightness(float brightness) {
+        getSettingsPreferences().edit()
+                .putFloat(VR_SKYBOX_BRIGHTNESS_PREF_KEY, clamp(brightness, 0.0f, 1.0f))
+                .apply();
+    }
+
+    private void resetStoredViewOffsets() {
+        getSettingsPreferences().edit()
+                .putFloat(VR_SCREEN_ROTATION_PREF_KEY, 0.0f)
+                .putFloat(VR_SCREEN_PAN_X_PREF_KEY, 0.0f)
+                .putFloat(VR_SCREEN_PAN_Y_PREF_KEY, 0.0f)
+                .apply();
+    }
+
+    private void restoreWebUiStateToRenderer() {
+        float storedPanX = getStoredPanX();
+        float storedPanY = getStoredPanY();
+        float storedRotation = getStoredRotationRadians();
+        currentBrightness = getStoredSkyboxBrightness();
+
+        if (storedPanX != 0.0f || storedPanY != 0.0f) {
+            vrRenderer.adjustScreenPosition(storedPanX, storedPanY);
+        }
+        if (storedRotation != 0.0f) {
+            vrRenderer.adjustScreenRotation(storedRotation);
+        }
+        vrRenderer.setSkyboxBrightness(currentBrightness);
+    }
+
     @Override
     public Response serve(IHTTPSession session) {
         String uri = session.getUri();
@@ -153,6 +273,7 @@ public class VrControlServer extends NanoHTTPD {
         } else if (uri.equals("/recenter")) {
             if (vrRenderer != null) {
                 vrRenderer.recenterView();
+                resetStoredViewOffsets();
                 return newFixedLengthResponse(Response.Status.OK, "application/json", "{\"status\":\"ok\"}");
             }
             return newFixedLengthResponse(Response.Status.SERVICE_UNAVAILABLE, "application/json", "{\"error\":\"no renderer\"}");
@@ -164,6 +285,7 @@ public class VrControlServer extends NanoHTTPD {
                         float val = Float.parseFloat(q.get(0));
                         currentBrightness = Math.max(0.0f, Math.min(1.0f, val));
                         vrRenderer.setSkyboxBrightness(currentBrightness);
+                        persistSkyboxBrightness(currentBrightness);
                     } catch (NumberFormatException e) {}
                 }
                 return newFixedLengthResponse(Response.Status.OK, "application/json", "{\"brightness\":" + currentBrightness + "}");
@@ -187,18 +309,21 @@ public class VrControlServer extends NanoHTTPD {
                         float dx = (float) obj.optDouble("dx", 0.0);
                         float dy = (float) obj.optDouble("dy", 0.0);
                         vrRenderer.adjustScreenPosition(dx, dy);
+                        persistPan(getStoredPanX() + dx, getStoredPanY() + dy);
                     } else if ("pinch".equals(type)) {
                         float dScale = (float) obj.optDouble("dScale", 0.0);
                         if (isQuickZoom && preZoomSize < 0) {
                             preZoomSize = vrRenderer.getScreenSize();
                         }
                         vrRenderer.adjustScreenSize(dScale * -4.0f);
+                        persistScreenSizeMultiplier(vrRenderer.getScreenSize());
                         if (isQuickZoom && preZoomSize > 0) {
                             resetQuickZoomIdle();
                         }
                     } else if ("rotate".equals(type)) {
                         float rotation = (float) obj.optDouble("rotation", 0.0);
                         vrRenderer.adjustScreenRotation(rotation);
+                        persistRotationRadians(getStoredRotationRadians() + rotation);
                     } else if ("pinch_rotate".equals(type)) {
                         float dScale = (float) obj.optDouble("dScale", 0.0);
                         float rotation = (float) obj.optDouble("rotation", 0.0);
@@ -206,7 +331,9 @@ public class VrControlServer extends NanoHTTPD {
                             preZoomSize = vrRenderer.getScreenSize();
                         }
                         vrRenderer.adjustScreenSize(dScale * -4.0f);
+                        persistScreenSizeMultiplier(vrRenderer.getScreenSize());
                         vrRenderer.adjustScreenRotation(rotation);
+                        persistRotationRadians(getStoredRotationRadians() + rotation);
                         if (isQuickZoom && preZoomSize > 0) {
                             resetQuickZoomIdle();
                         }
@@ -218,10 +345,12 @@ public class VrControlServer extends NanoHTTPD {
                         }
                         resetToPreferenceSettings();
                         vrRenderer.recenterView();
+                        resetStoredViewOffsets();
                     } else if ("brightness".equals(type)) {
                         float dy = (float) obj.optDouble("dy", 0.0);
                         currentBrightness = Math.max(0.0f, Math.min(1.0f, currentBrightness + dy));
                         vrRenderer.setSkyboxBrightness(currentBrightness);
+                        persistSkyboxBrightness(currentBrightness);
                     }
                 }
                 return newFixedLengthResponse(Response.Status.OK, "application/json", "{\"status\":\"ok\"}");
@@ -233,78 +362,91 @@ public class VrControlServer extends NanoHTTPD {
         } else if (uri.equals("/zoomin")) {
             if (vrRenderer != null) {
                 vrRenderer.adjustScreenDistance(-ZOOM_STEP);
+                persistScreenDistanceMeters(getStoredScreenDistanceMeters() - ZOOM_STEP);
                 return newFixedLengthResponse(Response.Status.OK, "application/json", "{\"status\":\"ok\",\"action\":\"zoomin\"}");
             }
             return newFixedLengthResponse(Response.Status.SERVICE_UNAVAILABLE, "application/json", "{\"error\":\"no renderer\"}");
         } else if (uri.equals("/zoomout")) {
             if (vrRenderer != null) {
                 vrRenderer.adjustScreenDistance(ZOOM_STEP);
+                persistScreenDistanceMeters(getStoredScreenDistanceMeters() + ZOOM_STEP);
                 return newFixedLengthResponse(Response.Status.OK, "application/json", "{\"status\":\"ok\",\"action\":\"zoomout\"}");
             }
             return newFixedLengthResponse(Response.Status.SERVICE_UNAVAILABLE, "application/json", "{\"error\":\"no renderer\"}");
         } else if (uri.equals("/screenup")) {
             if (vrRenderer != null) {
                 vrRenderer.adjustScreenSize(SCREEN_SIZE_STEP);
+                persistScreenSizeMultiplier(vrRenderer.getScreenSize());
                 return newFixedLengthResponse(Response.Status.OK, "application/json", "{\"status\":\"ok\",\"action\":\"screenup\"}");
             }
             return newFixedLengthResponse(Response.Status.SERVICE_UNAVAILABLE, "application/json", "{\"error\":\"no renderer\"}");
         } else if (uri.equals("/screendown")) {
             if (vrRenderer != null) {
                 vrRenderer.adjustScreenSize(-SCREEN_SIZE_STEP);
+                persistScreenSizeMultiplier(vrRenderer.getScreenSize());
                 return newFixedLengthResponse(Response.Status.OK, "application/json", "{\"status\":\"ok\",\"action\":\"screendown\"}");
             }
             return newFixedLengthResponse(Response.Status.SERVICE_UNAVAILABLE, "application/json", "{\"error\":\"no renderer\"}");
         } else if (uri.equals("/curvature-flat")) {
             if (vrRenderer != null) {
                 vrRenderer.setCurvatureMode(VrRenderer.CURVATURE_MODE_FLAT);
+                persistCurvatureMode(VrRenderer.CURVATURE_MODE_FLAT);
                 return newFixedLengthResponse(Response.Status.OK, "application/json", "{\"status\":\"ok\",\"action\":\"curvature-flat\"}");
             }
             return newFixedLengthResponse(Response.Status.SERVICE_UNAVAILABLE, "application/json", "{\"error\":\"no renderer\"}");
         } else if (uri.equals("/curvature-tv")) {
             if (vrRenderer != null) {
                 vrRenderer.setCurvatureMode(VrRenderer.CURVATURE_MODE_TV_CINEMA);
+                persistCurvatureMode(VrRenderer.CURVATURE_MODE_TV_CINEMA);
                 return newFixedLengthResponse(Response.Status.OK, "application/json", "{\"status\":\"ok\",\"action\":\"curvature-tv\"}");
             }
             return newFixedLengthResponse(Response.Status.SERVICE_UNAVAILABLE, "application/json", "{\"error\":\"no renderer\"}");
         } else if (uri.equals("/curvature-gaming")) {
             if (vrRenderer != null) {
                 vrRenderer.setCurvatureMode(VrRenderer.CURVATURE_MODE_GAMING_SCREEN);
+                persistCurvatureMode(VrRenderer.CURVATURE_MODE_GAMING_SCREEN);
                 return newFixedLengthResponse(Response.Status.OK, "application/json", "{\"status\":\"ok\",\"action\":\"curvature-gaming\"}");
             }
             return newFixedLengthResponse(Response.Status.SERVICE_UNAVAILABLE, "application/json", "{\"error\":\"no renderer\"}");
         } else if (uri.equals("/curvature-increase")) {
             if (vrRenderer != null) {
                 vrRenderer.setCurvatureAmount(vrRenderer.getCurvatureAmount() + CURVATURE_STEP);
+                persistCurvatureAmount(vrRenderer.getCurvatureAmount());
                 return newFixedLengthResponse(Response.Status.OK, "application/json", "{\"status\":\"ok\",\"action\":\"curvature-increase\"}");
             }
             return newFixedLengthResponse(Response.Status.SERVICE_UNAVAILABLE, "application/json", "{\"error\":\"no renderer\"}");
         } else if (uri.equals("/curvature-decrease")) {
             if (vrRenderer != null) {
                 vrRenderer.setCurvatureAmount(vrRenderer.getCurvatureAmount() - CURVATURE_STEP);
+                persistCurvatureAmount(vrRenderer.getCurvatureAmount());
                 return newFixedLengthResponse(Response.Status.OK, "application/json", "{\"status\":\"ok\",\"action\":\"curvature-decrease\"}");
             }
             return newFixedLengthResponse(Response.Status.SERVICE_UNAVAILABLE, "application/json", "{\"error\":\"no renderer\"}");
         } else if (uri.equals("/horizontal-increase")) {
             if (vrRenderer != null) {
                 vrRenderer.setHorizontalCurvature(vrRenderer.getHorizontalCurvature() + HORIZONTAL_CURVE_STEP);
+                persistHorizontalCurvature(vrRenderer.getHorizontalCurvature());
                 return newFixedLengthResponse(Response.Status.OK, "application/json", "{\"status\":\"ok\",\"action\":\"horizontal-increase\"}");
             }
             return newFixedLengthResponse(Response.Status.SERVICE_UNAVAILABLE, "application/json", "{\"error\":\"no renderer\"}");
         } else if (uri.equals("/horizontal-decrease")) {
             if (vrRenderer != null) {
                 vrRenderer.setHorizontalCurvature(vrRenderer.getHorizontalCurvature() - HORIZONTAL_CURVE_STEP);
+                persistHorizontalCurvature(vrRenderer.getHorizontalCurvature());
                 return newFixedLengthResponse(Response.Status.OK, "application/json", "{\"status\":\"ok\",\"action\":\"horizontal-decrease\"}");
             }
             return newFixedLengthResponse(Response.Status.SERVICE_UNAVAILABLE, "application/json", "{\"error\":\"no renderer\"}");
         } else if (uri.equals("/vertical-increase")) {
             if (vrRenderer != null) {
                 vrRenderer.setVerticalCurvature(vrRenderer.getVerticalCurvature() + VERTICAL_CURVE_STEP);
+                persistVerticalCurvature(vrRenderer.getVerticalCurvature());
                 return newFixedLengthResponse(Response.Status.OK, "application/json", "{\"status\":\"ok\",\"action\":\"vertical-increase\"}");
             }
             return newFixedLengthResponse(Response.Status.SERVICE_UNAVAILABLE, "application/json", "{\"error\":\"no renderer\"}");
         } else if (uri.equals("/vertical-decrease")) {
             if (vrRenderer != null) {
                 vrRenderer.setVerticalCurvature(vrRenderer.getVerticalCurvature() - VERTICAL_CURVE_STEP);
+                persistVerticalCurvature(vrRenderer.getVerticalCurvature());
                 return newFixedLengthResponse(Response.Status.OK, "application/json", "{\"status\":\"ok\",\"action\":\"vertical-decrease\"}");
             }
             return newFixedLengthResponse(Response.Status.SERVICE_UNAVAILABLE, "application/json", "{\"error\":\"no renderer\"}");
@@ -538,6 +680,7 @@ public class VrControlServer extends NanoHTTPD {
 
                 float newSize = animStartSize + (animTargetSize - animStartSize) * t;
                 vrRenderer.setScreenSize(newSize);
+                persistScreenSizeMultiplier(newSize);
 
                 if (elapsed < ZOOM_ANIMATION_DURATION_MS) {
                     animationHandler.postDelayed(this, 16);
@@ -550,14 +693,16 @@ public class VrControlServer extends NanoHTTPD {
     private void resetToPreferenceSettings() {
         SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
         
-        int vrDistanceRaw = prefs.getInt("seekbar_vr_screen_distance", 20);
+        int vrDistanceRaw = prefs.getInt(PreferenceConfiguration.VR_SCREEN_DISTANCE_PREF_STRING, 20);
         float vrDistance = vrDistanceRaw / 10f;
         
-        int vrSizeRaw = prefs.getInt("seekbar_vr_screen_size", 50);
+        int vrSizeRaw = prefs.getInt(PreferenceConfiguration.VR_SCREEN_SIZE_PREF_STRING, 50);
         float vrSize = vrSizeRaw / 50f;
         
         vrRenderer.setScreenDistance(vrDistance);
         vrRenderer.setScreenSize(vrSize);
+        persistScreenDistanceMeters(vrDistance);
+        persistScreenSizeMultiplier(vrSize);
     }
 
     public int getPort() {

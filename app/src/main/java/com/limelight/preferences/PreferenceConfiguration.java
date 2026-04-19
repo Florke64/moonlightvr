@@ -70,12 +70,15 @@ public class PreferenceConfiguration {
     private static final String GAMEPAD_MOTION_FALLBACK_PREF_STRING = "checkbox_gamepad_motion_fallback";
     static final String ENABLE_VR_PREF_STRING = "checkbox_enable_vr";
     private static final String ENABLE_SKYBOX_PREF_STRING = "checkbox_enable_skybox";
-    private static final String VR_SCREEN_DISTANCE_PREF_STRING = "seekbar_vr_screen_distance";
-    private static final String VR_SCREEN_SIZE_PREF_STRING = "seekbar_vr_screen_size";
-    private static final String VR_CURVATURE_MODE_PREF_STRING = "list_vr_curvature_mode";
-    private static final String VR_CURVATURE_AMOUNT_PREF_STRING = "seekbar_vr_curvature_amount";
-    private static final String VR_HORIZONTAL_CURVATURE_PREF_STRING = "seekbar_vr_horizontal_curvature";
-    private static final String VR_VERTICAL_CURVATURE_PREF_STRING = "seekbar_vr_vertical_curvature";
+    public static final String VR_SCREEN_DISTANCE_PREF_STRING = "seekbar_vr_screen_distance";
+    public static final String VR_SCREEN_SIZE_PREF_STRING = "seekbar_vr_screen_size";
+    public static final String VR_CURVATURE_MODE_PREF_STRING = "list_vr_curvature_mode";
+    public static final String VR_CURVATURE_AMOUNT_PREF_STRING = "seekbar_vr_curvature_amount";
+    public static final String VR_HORIZONTAL_CURVATURE_PREF_STRING = "seekbar_vr_horizontal_curvature";
+    public static final String VR_VERTICAL_CURVATURE_PREF_STRING = "seekbar_vr_vertical_curvature";
+    public static final String VR_CURVATURE_MODE_VALUE_FLAT = "flat";
+    public static final String VR_CURVATURE_MODE_VALUE_TV_CINEMA = "tv_cinema";
+    public static final String VR_CURVATURE_MODE_VALUE_GAMING_SCREEN = "gaming_screen";
     public static final String VR_LENS_SCALE_PREF_STRING = "vr_lens_scale";
     public static final String VR_LEFT_LENS_OFFSET_PREF_STRING = "vr_left_lens_offset_x";
     public static final String VR_RIGHT_LENS_OFFSET_PREF_STRING = "vr_right_lens_offset_x";
@@ -454,10 +457,10 @@ public class PreferenceConfiguration {
     }
 
     private static int getCurvatureModeValue(SharedPreferences prefs) {
-        String str = prefs.getString(VR_CURVATURE_MODE_PREF_STRING, "flat");
-        if (str.equals("tv_cinema")) {
+        String str = prefs.getString(VR_CURVATURE_MODE_PREF_STRING, VR_CURVATURE_MODE_VALUE_FLAT);
+        if (str.equals(VR_CURVATURE_MODE_VALUE_TV_CINEMA)) {
             return VR_CURVATURE_MODE_TV_CINEMA;
-        } else if (str.equals("gaming_screen")) {
+        } else if (str.equals(VR_CURVATURE_MODE_VALUE_GAMING_SCREEN)) {
             return VR_CURVATURE_MODE_GAMING_SCREEN;
         }
         return VR_CURVATURE_MODE_FLAT;
