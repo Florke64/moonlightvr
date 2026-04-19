@@ -8,8 +8,15 @@ import android.app.Service;
 import android.content.Intent;
 import android.os.Binder;
 import android.os.Build;
+import android.os.Handler;
 import android.os.IBinder;
+import android.os.Looper;
+import android.widget.Toast;
 
+import java.net.InetAddress;
+import java.net.NetworkInterface;
+import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -69,7 +76,7 @@ public class VrControlService extends Service {
 
     private void startServer() {
         if (isRunning) return;
-        
+
         executor = Executors.newSingleThreadExecutor();
         executor.execute(() -> {
             try {
@@ -79,11 +86,41 @@ public class VrControlService extends Service {
                 }
                 server.start();
                 isRunning = true;
+
+                String ipAddress = getLocalIpAddress();
+                final String message = ipAddress != null
+                        ? "VR WebUI: https://" + ipAddress + ":8555"
+                        : "VR WebUI started on port 8555";
+
+                new Handler(Looper.getMainLooper()).post(() ->
+                        Toast.makeText(getApplicationContext(), message, Toast.LENGTH_LONG).show()
+                );
             } catch (Exception e) {
                 e.printStackTrace();
                 stopSelf();
             }
         });
+    }
+
+    private String getLocalIpAddress() {
+        try {
+            List<NetworkInterface> interfaces = Collections.list(NetworkInterface.getNetworkInterfaces());
+            for (NetworkInterface intf : interfaces) {
+                List<InetAddress> addrs = Collections.list(intf.getInetAddresses());
+                for (InetAddress addr : addrs) {
+                    if (!addr.isLoopbackAddress()) {
+                        String sAddr = addr.getHostAddress();
+                        boolean isIPv4 = sAddr.indexOf(':') < 0;
+                        if (isIPv4) {
+                            return sAddr;
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return null;
     }
 
     private void stopServer() {
