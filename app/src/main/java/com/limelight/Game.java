@@ -1440,6 +1440,10 @@ public class Game extends Activity implements SurfaceHolder.Callback,
             return false;
         }
 
+        if (handleVrCameraToggleKey(event, true)) {
+            return true;
+        }
+
         // Handle a synthetic back button event that some Android OS versions
         // create as a result of a right-click. This event WILL repeat if
         // the right mouse button is held down, so we ignore those.
@@ -1522,6 +1526,10 @@ public class Game extends Activity implements SurfaceHolder.Callback,
             return false;
         }
 
+        if (handleVrCameraToggleKey(event, false)) {
+            return true;
+        }
+
         // Handle a synthetic back button event that some Android OS versions
         // create as a result of a right-click.
         int eventSource = event.getSource();
@@ -1569,6 +1577,42 @@ public class Game extends Activity implements SurfaceHolder.Callback,
 
             conn.sendKeyboardInput(translated, KeyboardPacket.KEY_UP, getModifierState(event),
                     keyboardTranslator.hasNormalizedMapping(event.getKeyCode(), event.getDeviceId()) ? 0 : MoonBridge.SS_KBE_FLAG_NON_NORMALIZED);
+        }
+
+        return true;
+    }
+
+    private boolean handleVrCameraToggleKey(KeyEvent event, boolean isKeyDown) {
+        if (!vrMode || event.getKeyCode() != KeyEvent.KEYCODE_VOLUME_DOWN) {
+            return false;
+        }
+
+        if (!isKeyDown) {
+            return true;
+        }
+
+        if (event.getRepeatCount() > 0) {
+            return true;
+        }
+
+        if (prefConfig == null) {
+            prefConfig = PreferenceConfiguration.readPreferences(this);
+        }
+
+        final boolean enableCameraPip = prefConfig == null || !prefConfig.enableVrCameraPip;
+        if (prefConfig != null) {
+            prefConfig.enableVrCameraPip = enableCameraPip;
+        }
+
+        if (enableCameraPip) {
+            startVrCameraIfReady();
+        } else {
+            if (vrCameraManager != null && vrCameraManager.isStarted()) {
+                vrCameraManager.stopCamera();
+            }
+            if (vrRenderer != null) {
+                vrRenderer.setCameraEnabled(false);
+            }
         }
 
         return true;
