@@ -31,6 +31,7 @@ constexpr float kScreenAspectRatio = 16.0f / 9.0f;
 constexpr float kMinScreenDistanceMeters = 1.0f;
 constexpr float kMaxScreenDistanceMeters = 4.0f;
 constexpr float kDefaultScreenDistanceMeters = 2.0f;
+constexpr float kCameraWindowDistanceMeters = 1.0f;
 constexpr float kMinLensScale = 0.5f;
 constexpr float kMaxLensScale = 3.0f;
 
@@ -753,8 +754,8 @@ void VrMoonlightApp::RenderVideoToTexture(
           lens_distortion_, eyes[eye_index], kZNear, kZFar, projection_raw);
       Matrix4x4 projection = GetMatrixFromGlArray(projection_raw);
 
-      Matrix4x4 view = eye_from_head * head_view;
-      Matrix4x4 camera_mvp = projection * view * camera_model_matrix_;
+      Matrix4x4 camera_view = eye_from_head;
+      Matrix4x4 camera_mvp = projection * camera_view * camera_model_matrix_;
       std::array<float, 16> camera_mvp_gl = camera_mvp.ToGlArray();
 
       glViewport(viewport_x[eye_index], 0, viewport_width[eye_index], screen_height_);
@@ -1096,11 +1097,11 @@ void VrMoonlightApp::UpdateScreenGeometry() {
 }
 
 void VrMoonlightApp::UpdateCameraModelMatrix() {
-  const float pip_width = 0.8f;
-  const float pip_height = pip_width / (16.0f / 9.0f);
+  const float pip_width = kScreenWidthMeters * 0.55f;
+  const float pip_height = pip_width / kScreenAspectRatio;
 
   const std::array<float, 3> scale = {pip_width * 0.5f, -pip_height * 0.5f, 1.0f};
-  const std::array<float, 3> translation = {0.0f, -0.6f, -1.2f};
+  const std::array<float, 3> translation = {0.0f, 0.0f, -kCameraWindowDistanceMeters};
 
   camera_model_matrix_ = GetTranslationMatrix(translation) * GetScaleMatrix(scale);
 }
